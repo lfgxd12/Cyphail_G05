@@ -6,8 +6,9 @@ Escuela de Informática, Universidad Nacional (UNA), Costa Rica.
 
 ## Authors
 * **Nombre Luis Felipe Jiménez Fernández 1** - ID: 119130110 - Grupo: G05
-* **Nombre Estudiante 2** - ID: 987654321 - Grupo: G05
-* **Nombre Estudiante 3** - ID: 456789123 - Grupo: G05
+* **Nombre Jose David Chavarria Villalobos 2** - ID: 402710170 - Grupo: G05
+* **Nombre Jostin Jimenez Alfaro 3** - ID: 119620942 - Grupo: G05
+* **Nombre Angel Rojas Ruano 4** - ID: 	118780534 - Grupo: G05
 
 ## Prerequisites
 * **Java Development Kit (JDK)**: Version 26 or higher.
