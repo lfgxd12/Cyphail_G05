@@ -6,6 +6,13 @@ import cr.ac.una.eif400.cyphail.output.TablePrinter;
 
 import java.util.List;
 
+/**
+ * Cyphail - Graph Query Engine Prototype
+ * EIF400-II-2026 - Escuela de Informatica, UNA
+ * Grupo: G05
+ * Autores: Luis Felipe Jimenez Fernandez, Jose David Chavarria Villalobos,
+ *          Jostin Jimenez Alfaro, Angel Rojas Ruano
+ */
 public class UseHandler implements ReplCommand {
     private final List<GraphInfo> graphs = List.of(
             new GraphInfo("amigos", "Social Network"),
