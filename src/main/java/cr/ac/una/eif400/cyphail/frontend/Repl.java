@@ -15,9 +15,8 @@ import java.util.Scanner;
  *          Jostin Jimenez Alfaro, Angel Rojas Ruano
  */
 public class Repl {
-    // Reemplaza G05 por el identificador exacto de tu grupo/horario si aplica
     private static final String BANNER = """
-        Welcome to Cyphail-G05 v.0.1. August 2026. ESCINF/UNA EIF400-II-2026
+        Welcome to Cyphail-05-10am v.0.1. August 2026. ESCINF/UNA EIF400-II-2026
         Visit www.whatiscyphail.com for more information
         Type ".help" for more information and commands
         Type ".exit" to quit
