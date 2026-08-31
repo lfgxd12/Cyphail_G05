@@ -7,6 +7,13 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Scanner;
 
+/**
+ * Cyphail - Graph Query Engine Prototype
+ * EIF400-II-2026 - Escuela de Informatica, UNA
+ * Grupo: G05
+ * Autores: Luis Felipe Jimenez Fernandez, Jose David Chavarria Villalobos,
+ *          Jostin Jimenez Alfaro, Angel Rojas Ruano
+ */
 public class Repl {
     // Reemplaza G05 por el identificador exacto de tu grupo/horario si aplica
     private static final String BANNER = """
