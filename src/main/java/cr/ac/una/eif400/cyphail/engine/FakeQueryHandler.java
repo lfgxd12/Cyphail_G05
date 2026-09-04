@@ -2,6 +2,13 @@ package cr.ac.una.eif400.cyphail.engine;
 
 import cr.ac.una.eif400.cyphail.output.TablePrinter;
 
+/**
+ * Cyphail - Graph Query Engine Prototype
+ * EIF400-II-2026 - Escuela de Informatica, UNA
+ * Grupo: G05
+ * Autores: Luis Felipe Jimenez Fernandez, Jose David Chavarria Villalobos,
+ *          Jostin Jimenez Alfaro, Angel Rojas Ruano
+ */
 public class FakeQueryHandler {
     public static void process(String query) {
         String normalizedQuery = query.replaceAll("\\s+", " ").trim();
