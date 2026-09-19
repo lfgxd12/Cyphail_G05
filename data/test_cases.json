@@ -1,0 +1,20 @@
+[
+  {
+    "id": "case_1",
+    "query": "MATCH (m:Movie) RETURN m.title, m.year AS year",
+    "headers": ["m.title", "year"],
+    "data": [
+      ["Matrix", "1999"],
+      ["Inception", "2010"]
+    ]
+  },
+  {
+    "id": "case_2",
+    "query": "MATCH (b:Book) WHERE b.pages < 300 RETURN b.title, b.pages AS totalPages",
+    "headers": ["b.title", "totalPages"],
+    "data": [
+      ["El Principito", "96"],
+      ["Rebelion en la Granja", "112"]
+    ]
+  }
+]
