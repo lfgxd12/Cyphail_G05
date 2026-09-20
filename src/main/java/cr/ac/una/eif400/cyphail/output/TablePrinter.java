@@ -1,5 +1,4 @@
 package cr.ac.una.eif400.cyphail.output;
-
 import com.github.freva.asciitable.AsciiTable;
 
 /**
@@ -9,6 +8,7 @@ import com.github.freva.asciitable.AsciiTable;
  * Autores: Luis Felipe Jimenez Fernandez, Jose David Chavarria Villalobos,
  *          Jostin Jimenez Alfaro, Angel Rojas Ruano
  */
+
 public class TablePrinter {
     public static void printTable(String[] headers, String[][] data) {
         System.out.println(AsciiTable.getTable(headers, data));
