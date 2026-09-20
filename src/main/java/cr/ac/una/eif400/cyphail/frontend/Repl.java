@@ -23,6 +23,7 @@ public class Repl {
         commands.put(".help", new HelpHandler());
         commands.put(".about", new AboutHandler());
         commands.put(".use", new UseHandler());
+        commands.put(".tree", new TreeHandler());
     }
 
     public void start() {

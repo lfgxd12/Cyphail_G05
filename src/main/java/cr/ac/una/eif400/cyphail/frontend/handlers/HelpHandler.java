@@ -17,6 +17,7 @@ public class HelpHandler implements ReplCommand {
               .help             Show this help message
               .about            Show project authors and course details
               .use [graph]      List available graphs or select a graph
+              .tree <query>     Show the AST of a query (S-Expression + JSON)
               .exit             Exit the REPL
 
             Engine Queries:
