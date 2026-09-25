@@ -116,4 +116,12 @@ public class Parsers {
     public static <I, T, S, R> Parser<I, List<T>, R> SepBy(Parser<I, T, R> p, Parser<I, S, R> sep) {
         return Map(Opt(SepBy1(p, sep)), found -> found.orElse(List.of()));
     }
+
+    // Choice es Or pero para más de 2 parsers, es más potente. Y ayuda a evitar un Or(Or(...))
+    // Eso sí, solo funciona si todos los parser son del mismo tipo,
+    // pero devuelve el primer Or que tenga exito.
+    @SafeVarargs
+    public static <I, T, R> Parser<I, T, R> Choice(Parser<I, T, R>... options) {
+        return Stream.of(options).reduce(Parsers::Or).orElseThrow();
+    }
 }

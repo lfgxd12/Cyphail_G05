@@ -5,24 +5,21 @@ import cr.ac.una.eif400.cyphail.parser.core.Fail;
 import cr.ac.una.eif400.cyphail.parser.core.Ok;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
-
 import static org.junit.jupiter.api.Assertions.*;
+import cr.ac.una.eif400.cyphail.ast.BinaryExpr;
 
-/**
+
+// To Do:
+    // Verificar los casos de prueba para que parseen a un QueryNode.
+
+/*
  * Cyphail - Graph Query Engine Prototype
  * EIF400-II-2026 - Escuela de Informatica, UNA
  * Grupo: G05
  * Autores: Luis Felipe Jimenez Fernandez, Jose David Chavarria Villalobos,
- *          Jostin Jimenez Alfaro, Angel Rojas Ruano
- *
- * Verifica que los casos de prueba de referencia del profesor (Casos 1-11,
- * SPEC-Sprint-P1-Casos de Prueba) se parseen a un QueryNode correcto.
- *
- * NOTA DE EQUIPO: al momento de escribir esta suite, CyphailParser solo
- * soporta un unico patron de nodo por MATCH, sin propiedades ni multiples
- * etiquetas, y no implementa CREATE ni DELETE. Los casos que dependen de
- * esas caracteristicas quedan marcados @Disabled con el motivo especifico.
+ * Jostin Jimenez Alfaro, Angel Rojas Ruano
  */
+
 class ParserTest {
 
     @Test
@@ -131,6 +128,18 @@ class ParserTest {
                 assertTrue(node.remove().isPresent());
                 assertEquals(1, node.remove().get().items().size());
                 assertEquals("age", node.remove().get().items().get(0).property());
+            }
+        }
+    }
+
+    @Test
+    void whereWithNotEqualsOperator_isParsed() {
+        switch (CyphailParser.parse("MATCH (m:Movie) WHERE m.year <> 1999 RETURN m.title")) {
+            case Fail(String reason) -> fail("Should parse, but failed: " + reason);
+            case Ok(QueryNode node, var rest) -> {
+                assertTrue(node.where().isPresent());
+                BinaryExpr condition = assertInstanceOf(BinaryExpr.class, node.where().get().condition());
+                assertEquals("<>", condition.operator());
             }
         }
     }

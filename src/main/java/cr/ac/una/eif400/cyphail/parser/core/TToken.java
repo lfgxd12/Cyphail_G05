@@ -11,5 +11,8 @@ public enum TToken {
     GT, LT, GTE, LTE, EQ, NEQ,
 
     // Identificadores y Literales
-    ID, NUM, STRING
+    ID, NUM, STRING,
+
+    // End of File
+    EOF
 }

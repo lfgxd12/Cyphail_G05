@@ -44,10 +44,13 @@ public class CyphailParser {
         return Parsers.Or(propertyLookup, Parsers.Or(variable, Parsers.Or(numberLit, stringLit)));
     }
 
+    // El Choice ayuda con el bug que había con los operadores de 2 caracteres,
+    // que podían solo consumirse uno y el otro se quedaba en el input.
     private static Parser<InputString, TokenString, String> comparisonOp() {
-        return Parsers.Or(CyphailLexers.Gt(),
-                Parsers.Or(CyphailLexers.Lt(),
-                        Parsers.Or(CyphailLexers.Eq(), CyphailLexers.Neq())));
+
+        return Parsers.Choice(
+                CyphailLexers.Neq(), CyphailLexers.Lte(), CyphailLexers.Gte(),
+                CyphailLexers.Lt(), CyphailLexers.Gt(), CyphailLexers.Eq());
     }
 
     public static Parser<InputString, Expression, String> expression() {
