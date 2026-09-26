@@ -6,6 +6,15 @@ import cr.ac.una.eif400.cyphail.output.TreePrinter;
 import cr.ac.una.eif400.cyphail.parser.CyphailParser;
 import cr.ac.una.eif400.cyphail.parser.core.Fail;
 import cr.ac.una.eif400.cyphail.parser.core.Ok;
+import cr.ac.una.eif400.cyphail.validation.VariableScopeChecker;
+
+/*
+ * Cyphail - Graph Query Engine Prototype
+ * EIF400-II-2026 - Escuela de Informatica, UNA
+ * Grupo: G05
+ * Autores: Luis Felipe Jimenez Fernandez, Jose David Chavarria Villalobos,
+ * Jostin Jimenez Alfaro, Angel Rojas Ruano
+ */
 
 public class TreeHandler implements ReplCommand {
 
@@ -17,18 +26,10 @@ public class TreeHandler implements ReplCommand {
         }
 
         switch (CyphailParser.parse(args)) {
-            case Fail(String reason) ->
-                    System.out.println("ERROR: " + reason);
-            case Ok(QueryNode node, var rest) -> {
-                if (rest.index() < rest.input().length()) {
-                    System.out.println("ERROR: Unexpected trailing input: \""
-                            + rest.input().substring(rest.index()).trim() + "\"");
-                    return;
-                }
-                System.out.println("S-Expression:");
-                System.out.println("  " + TreePrinter.toSExpr(node));
-                System.out.println("JSON:");
-                System.out.println("  " + TreePrinter.toJson(node));
+            case Fail(String reason) -> System.out.println("ERROR: Syntax error. " + reason);
+            case Ok(QueryNode query, var rest) -> {
+                System.out.println(TreePrinter.print(query));
+                VariableScopeChecker.check(query).forEach(error -> System.out.println("ERROR: " + error));
             }
         }
     }
