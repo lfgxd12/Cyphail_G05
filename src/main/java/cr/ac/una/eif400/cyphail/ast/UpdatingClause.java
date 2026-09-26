@@ -8,4 +8,5 @@ package cr.ac.una.eif400.cyphail.ast;
  * Jostin Jimenez Alfaro, Angel Rojas Ruano
  */
 
-public record WhereClause(Expression condition) implements Clause { }
+public sealed interface UpdatingClause extends Clause permits CreateClause, DeleteClause, RemoveClause {
+}
