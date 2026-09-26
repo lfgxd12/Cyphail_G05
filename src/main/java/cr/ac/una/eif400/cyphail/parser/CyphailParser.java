@@ -3,207 +3,146 @@ package cr.ac.una.eif400.cyphail.parser;
 import cr.ac.una.eif400.cyphail.ast.*;
 import cr.ac.una.eif400.cyphail.parser.core.*;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
+
+/*
+ * Cyphail - Graph Query Engine Prototype
+ * EIF400-II-2026 - Escuela de Informatica, UNA
+ * Grupo: G05
+ * Autores: Luis Felipe Jimenez Fernandez, Jose David Chavarria Villalobos,
+ * Jostin Jimenez Alfaro, Angel Rojas Ruano
+ */
 
 public class CyphailParser {
 
-    private static Parser<InputString, MatchClause, String> matchClause() {
-        var seq = Parsers.Seq(
-                CyphailLexers.Match(),
-                CyphailLexers.LParen(),
-                CyphailLexers.Id(),
-                CyphailLexers.Colon(),
-                CyphailLexers.Id(),     // etiqueta, ej: "Movie"
-                CyphailLexers.RParen()
-        );
-        return Parsers.Map(seq, tokens ->
-                new MatchClause(tokens.get(2).value(), tokens.get(4).value())
-        );
+    // Un identificador, devolviendo solo su texto
+    private static final Parser<InputString, String, String> ID =
+            Parsers.Map(CyphailLexers.Id(), TokenString::value);
+
+    // ---------------- Expresiones ----------------
+
+    // propertyLookup : variable "." propiedad      ej. m.title
+    private static Parser<InputString, PropertyLookup, String> propertyLookup() {
+        return Parsers.FlatMap(ID, variable ->
+                Parsers.Map(Parsers.Right(CyphailLexers.Dot(), ID),
+                        property -> new PropertyLookup(new VariableExpr(variable), property)));
     }
 
+    // atom : m.title | m | 300 | "texto"
+    // propertyLookup va primero: si "m" se leyera como variable, ".title" quedaria suelto
     private static Parser<InputString, Expression, String> atom() {
-        Parser<InputString, Expression, String> propertyLookup = Parsers.Map(
-                Parsers.Seq(CyphailLexers.Id(), CyphailLexers.Dot(), CyphailLexers.Id()),
-                tokens -> new PropertyLookup(new VariableExpr(tokens.get(0).value()), tokens.get(2).value())
-        );
-
-        Parser<InputString, Expression, String> variable = Parsers.Map(
-                CyphailLexers.Id(), t -> new VariableExpr(t.value())
-        );
-
-        Parser<InputString, Expression, String> numberLit = Parsers.Map(
-                CyphailLexers.Number(), t -> new LiteralExpr(t.value())
-        );
-
-        Parser<InputString, Expression, String> stringLit = Parsers.Map(
-                CyphailLexers.String(), t -> new LiteralExpr(t.value())
-        );
-
-        return Parsers.Or(propertyLookup, Parsers.Or(variable, Parsers.Or(numberLit, stringLit)));
+        return Parsers.Choice(
+                Parsers.Map(propertyLookup(), lookup -> lookup),
+                Parsers.Map(ID, VariableExpr::new),
+                Parsers.Map(CyphailLexers.Number(), token -> new LiteralExpr(token.value())),
+                Parsers.Map(CyphailLexers.String(), token -> new LiteralExpr(token.value())));
     }
 
-    // El Choice ayuda con el bug que había con los operadores de 2 caracteres,
-    // que podían solo consumirse uno y el otro se quedaba en el input.
+    // Primero los operadores de 2 caracteres
+    // Pd. fixeado el <>
     private static Parser<InputString, TokenString, String> comparisonOp() {
-
         return Parsers.Choice(
                 CyphailLexers.Neq(), CyphailLexers.Lte(), CyphailLexers.Gte(),
                 CyphailLexers.Lt(), CyphailLexers.Gt(), CyphailLexers.Eq());
     }
 
+    // expression : atom (operador atom)?
+    // Si despues del atom viene un operador, se arma un BinaryExpr; si no, queda el atom solo
     public static Parser<InputString, Expression, String> expression() {
-        return (InputString source) -> {
-            var leftResult = atom().parse(source);
-            if (leftResult instanceof Fail<InputString, Expression, String> fail) {
-                return fail;
-            }
-            var leftOk = (Ok<InputString, Expression, String>) leftResult;
-            Expression left = leftOk.token();
-            InputString rest = leftOk.rest();
-
-            var opResult = comparisonOp().parse(rest);
-            if (opResult instanceof Fail<InputString, TokenString, String>) {
-                return new Ok<>(left, rest);
-            }
-            var opOk = (Ok<InputString, TokenString, String>) opResult;
-
-            return switch (atom().parse(opOk.rest())) {
-                case Fail(String reason) -> new Fail<>(reason);
-                case Ok(Expression right, InputString afterRight) ->
-                        new Ok<>(new BinaryExpr(left, opOk.token().value(), right), afterRight);
-            };
-        };
+        return Parsers.FlatMap(atom(), left ->
+                Parsers.Map(
+                        Parsers.Opt(Parsers.FlatMap(comparisonOp(), op ->
+                                Parsers.Map(atom(), right -> new BinaryExpr(left, op.value(), right)))),
+                        comparison -> comparison.<Expression>map(binary -> binary).orElse(left)));
     }
 
-    private static Parser<InputString, ReturnItem, String> returnItem() {
-        return (InputString source) -> switch (expression().parse(source)) {
-            case Fail(String reason) -> new Fail<>(reason);
-            case Ok(Expression expr, InputString afterExpr) -> {
-                var aliasResult = Parsers.Opt(
-                        Parsers.Map(CyphailLexers.As(), t -> t) // solo para consumir el AS
-                ).parse(afterExpr);
-                // Si hubo AS, necesitamos el identificador que sigue
-                if (aliasResult instanceof Ok(Optional<TokenString> asToken, InputString afterAs) && asToken.isPresent()) {
-                    yield switch (CyphailLexers.Id().parse(afterAs)) {
-                        case Fail(String reason) -> new Fail<>(reason);
-                        case Ok(TokenString aliasId, InputString afterAliasId) ->
-                                new Ok<>(new ReturnItem(expr, Optional.of(aliasId.value())), afterAliasId);
-                    };
-                } else {
-                    yield new Ok<>(new ReturnItem(expr, Optional.empty()), afterExpr);
-                }
-            }
-        };
+    // ---------------- Patrones ----------------
+
+    // property : clave ":" expression      ej. id: 1   o   personId: p.id
+    private static Parser<InputString, Property, String> property() {
+        return Parsers.FlatMap(Parsers.Left(ID, CyphailLexers.Colon()), key ->
+                Parsers.Map(expression(), value -> new Property(key, value)));
     }
 
-    private static Parser<InputString, ReturnItem, String> commaThenItem() {
-        return (InputString source) -> {
-            var commaResult = CyphailLexers.Comma().parse(source);
-            if (commaResult instanceof Fail<InputString, TokenString, String> fail) {
-                return new Fail<>(fail.reason());
-            }
-            return returnItem().parse(((Ok<InputString, TokenString, String>) commaResult).rest());
-        };
+    // properties : "{" (property ("," property)*)? "}"
+    private static Parser<InputString, List<Property>, String> properties() {
+        return Parsers.Between(CyphailLexers.LBrace(),
+                Parsers.SepBy(property(), CyphailLexers.Comma()),
+                CyphailLexers.RBrace());
     }
 
-    private static Parser<InputString, ReturnClause, String> returnClause() {
-        return (InputString source) -> {
-            var returnTokenResult = CyphailLexers.Return().parse(source);
-            if (returnTokenResult instanceof Fail<InputString, TokenString, String> fail) {
-                return new Fail<>(fail.reason());
-            }
-            InputString afterReturn = ((Ok<InputString, TokenString, String>) returnTokenResult).rest();
+    // nodePattern : "(" variable? (":" etiqueta)* properties? ")"
+    private static Parser<InputString, NodePattern, String> nodePattern() {
+        var labels = Parsers.Many(Parsers.Right(CyphailLexers.Colon(), ID));
+        var props = Parsers.Map(Parsers.Opt(properties()), found -> found.orElse(List.of()));
+        var inside = Parsers.FlatMap(Parsers.Opt(ID), variable ->
+                Parsers.FlatMap(labels, labelList ->
+                        Parsers.Map(props, propertyList -> new NodePattern(variable, labelList, propertyList))));
+        return Parsers.Between(CyphailLexers.LParen(), inside, CyphailLexers.RParen());
+    }
 
-            return switch (returnItem().parse(afterReturn)) {
-                case Fail(String reason) -> new Fail<>(reason);
-                case Ok(ReturnItem first, InputString afterFirst) -> switch (Parsers.Many(commaThenItem()).parse(afterFirst)) {
-                    case Fail(String reason) -> new Fail<>(reason);
-                    case Ok(List<ReturnItem> more, InputString afterAll) -> {
-                        var items = new ArrayList<ReturnItem>();
-                        items.add(first);
-                        items.addAll(more);
-                        yield new Ok<>(new ReturnClause(items), afterAll);
-                    }
-                };
-            };
-        };
+    // pattern : nodePattern ("," nodePattern)*
+    private static Parser<InputString, List<NodePattern>, String> pattern() {
+        return Parsers.SepBy1(nodePattern(), CyphailLexers.Comma());
+    }
+
+    // ---------------- Clausulas ----------------
+
+    private static Parser<InputString, MatchClause, String> matchClause() {
+        return Parsers.Map(Parsers.Right(CyphailLexers.Match(), pattern()), MatchClause::new);
     }
 
     private static Parser<InputString, WhereClause, String> whereClause() {
-        return (InputString source) -> {
-            var whereResult = CyphailLexers.Where().parse(source);
-            if (whereResult instanceof Fail<InputString, TokenString, String> fail) {
-                return new Fail<>(fail.reason());
-            }
-            InputString rest = ((Ok<InputString, TokenString, String>) whereResult).rest();
-
-            return switch (expression().parse(rest)) {
-                case Fail(String reason) -> new Fail<>(reason);
-                case Ok(Expression cond, InputString afterExpr) -> new Ok<>(new WhereClause(cond), afterExpr);
-            };
-        };
+        return Parsers.Map(Parsers.Right(CyphailLexers.Where(), expression()), WhereClause::new);
     }
 
-    private static Parser<InputString, PropertyLookup, String> propertyLookupOnly() {
-        return Parsers.Map(
-                Parsers.Seq(CyphailLexers.Id(), CyphailLexers.Dot(), CyphailLexers.Id()),
-                tokens -> new PropertyLookup(new VariableExpr(tokens.get(0).value()), tokens.get(2).value())
-        );
+    private static Parser<InputString, UpdatingClause, String> createClause() {
+        return Parsers.Map(Parsers.Right(CyphailLexers.Create(), pattern()), CreateClause::new);
     }
 
-    private static Parser<InputString, PropertyLookup, String> commaThenProperty() {
-        return (InputString source) -> {
-            var commaResult = CyphailLexers.Comma().parse(source);
-            if (commaResult instanceof Fail<InputString, TokenString, String> fail) {
-                return new Fail<>(fail.reason());
-            }
-            return propertyLookupOnly().parse(((Ok<InputString, TokenString, String>) commaResult).rest());
-        };
+    // deleteClause : "DETACH"? "DELETE" expression ("," expression)*
+    private static Parser<InputString, UpdatingClause, String> deleteClause() {
+        return Parsers.FlatMap(Parsers.Opt(CyphailLexers.Detach()), detach ->
+                Parsers.Map(Parsers.Right(CyphailLexers.Delete(), Parsers.SepBy1(expression(), CyphailLexers.Comma())),
+                        items -> new DeleteClause(detach.isPresent(), items)));
     }
 
-    private static Parser<InputString, RemoveClause, String> removeClause() {
-        return (InputString source) -> {
-            var removeResult = CyphailLexers.Remove().parse(source);
-            if (removeResult instanceof Fail<InputString, TokenString, String> fail) {
-                return new Fail<>(fail.reason());
-            }
-            InputString afterRemove = ((Ok<InputString, TokenString, String>) removeResult).rest();
+    private static Parser<InputString, UpdatingClause, String> removeClause() {
+        return Parsers.Map(Parsers.Right(CyphailLexers.Remove(), Parsers.SepBy1(propertyLookup(), CyphailLexers.Comma())),
+                RemoveClause::new);
+    }
 
-            return switch (propertyLookupOnly().parse(afterRemove)) {
-                case Fail(String reason) -> new Fail<>(reason);
-                case Ok(PropertyLookup first, InputString afterFirst) -> switch (Parsers.Many(commaThenProperty()).parse(afterFirst)) {
-                    case Fail(String reason) -> new Fail<>(reason);
-                    case Ok(List<PropertyLookup> more, InputString afterAll) -> {
-                        var items = new ArrayList<PropertyLookup>();
-                        items.add(first);
-                        items.addAll(more);
-                        yield new Ok<>(new RemoveClause(items), afterAll);
-                    }
-                };
-            };
-        };
+    // updatingClause : createClause | deleteClause | removeClause
+    private static Parser<InputString, UpdatingClause, String> updatingClause() {
+        return Parsers.Choice(createClause(), deleteClause(), removeClause());
+    }
+
+    // returnItem : expression ("AS" alias)?
+    private static Parser<InputString, ReturnItem, String> returnItem() {
+        return Parsers.FlatMap(expression(), expr ->
+                Parsers.Map(Parsers.Opt(Parsers.Right(CyphailLexers.As(), ID)),
+                        alias -> new ReturnItem(expr, alias)));
+    }
+
+    private static Parser<InputString, ReturnClause, String> returnClause() {
+        return Parsers.Map(Parsers.Right(CyphailLexers.Return(), Parsers.SepBy1(returnItem(), CyphailLexers.Comma())),
+                ReturnClause::new);
+    }
+
+    // ---------------- Consulta completa ----------------
+
+    // query : MATCH [WHERE] updatingClause* [RETURN] EOF
+    // El orden sigue la gramatica: readingClause* updatingClause* returnClause?
+    // EOF al final garantiza que no sobre texto sin leer
+    private static Parser<InputString, QueryNode, String> query() {
+        return Parsers.FlatMap(matchClause(), match ->
+                Parsers.FlatMap(Parsers.Opt(whereClause()), where ->
+                        Parsers.FlatMap(Parsers.Many(updatingClause()), updates ->
+                                Parsers.Map(Parsers.Left(Parsers.Opt(returnClause()), CyphailLexers.Eof()),
+                                        ret -> new QueryNode(match, where, updates, ret)))));
     }
 
     public static Result<InputString, QueryNode, String> parse(String input) {
-        InputString source = new InputString(input, 0);
-
-        return switch (matchClause().parse(source)) {
-            case Fail(String reason) -> new Fail<>(reason);
-            case Ok(MatchClause match, InputString afterMatch) -> switch (Parsers.Opt(whereClause()).parse(afterMatch)) {
-                case Fail(String reason) -> new Fail<>(reason);
-                case Ok(Optional<WhereClause> where, InputString afterWhere) -> switch (Parsers.Opt(returnClause()).parse(afterWhere)) {
-                    case Fail(String reason) -> new Fail<>(reason);
-                    case Ok(Optional<ReturnClause> ret, InputString afterReturn) -> switch (Parsers.Opt(removeClause()).parse(afterReturn)) {
-                        case Fail(String reason) -> new Fail<>(reason);
-                        case Ok(Optional<RemoveClause> remove, InputString afterRemove) ->
-                                new Ok<>(new QueryNode(match, where, ret, remove), afterRemove);
-                    };
-                };
-            };
-        };
+        return query().parse(new InputString(input, 0));
     }
 }
-
-
