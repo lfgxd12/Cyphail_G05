@@ -2,68 +2,82 @@ package cr.ac.una.eif400.cyphail.validation;
 
 import cr.ac.una.eif400.cyphail.ast.*;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
+import java.util.stream.Stream;
 
-/**
+/*
  * Cyphail - Graph Query Engine Prototype
  * EIF400-II-2026 - Escuela de Informatica, UNA
  * Grupo: G05
  * Autores: Luis Felipe Jimenez Fernandez, Jose David Chavarria Villalobos,
- *          Jostin Jimenez Alfaro, Angel Rojas Ruano
- *
- * Verifica el ambito (scope) de las variables de una consulta: toda variable
- * usada en WHERE, RETURN o REMOVE debe haber sido declarada previamente en
- * un patron MATCH. No confunde una propiedad (m.title) con una variable no
- * definida: solo revisa el nombre de la variable, no el nombre de la propiedad.
+ * Jostin Jimenez Alfaro, Angel Rojas Ruano
  */
+
 public class VariableScopeChecker {
 
-    /**
-     * @throws SemanticException si alguna variable referenciada no fue
-     *                           declarada en el patron MATCH de la consulta.
-     */
-    public static void validate(QueryNode query) {
-        Set<String> declared = declaredVariables(query.match());
-
-        query.where().ifPresent(w -> checkExpression(w.condition(), declared));
-
-        query.returnClause().ifPresent(r ->
-                r.items().forEach(item -> checkExpression(item.expression(), declared)));
-
-        query.remove().ifPresent(remove ->
-                remove.items().forEach(lookup ->
-                        checkVariable(lookup.variable().name(), declared, "REMOVE clause")));
-    }
-
-
-    private static Set<String> declaredVariables(MatchClause match) {
+    // Devuelve TODOS los errores encontrados (lista vacia = consulta valida)
+    public static List<String> check(QueryNode query) {
         Set<String> declared = new HashSet<>();
-        declared.add(match.variable());
-        return declared;
+        List<String> errors = new ArrayList<>();
+
+        declarePatterns(query.match().patterns(), declared, errors);
+
+        query.where().ifPresent(where ->
+                errors.addAll(undefinedIn(where.condition(), declared, "WHERE clause").toList()));
+
+        for (UpdatingClause update : query.updates()) {
+            switch (update) {
+                case CreateClause(var patterns) -> declarePatterns(patterns, declared, errors);
+                case DeleteClause(var detach, var items) -> items.forEach(item ->
+                        errors.addAll(undefinedIn(item, declared, "DELETE clause").toList()));
+                case RemoveClause(var items) -> items.forEach(item ->
+                        errors.addAll(undefinedIn(item, declared, "REMOVE clause").toList()));
+            }
+        }
+
+        query.returnClause().ifPresent(ret -> ret.items().forEach(item ->
+                errors.addAll(undefinedIn(item.expression(), declared, "RETURN clause").toList())));
+
+        return errors.stream().distinct().toList();
     }
 
-    private static void checkExpression(Expression expr, Set<String> declared) {
-        switch (expr) {
-            case VariableExpr(String name) ->
-                    checkVariable(name, declared, "expression");
-            case PropertyLookup(VariableExpr variable, String property) ->
-                    checkVariable(variable.name(), declared, "property access ('" + property + "')");
-            case BinaryExpr(Expression left, String operator, Expression right) -> {
-                checkExpression(left, declared);
-                checkExpression(right, declared);
-            }
-            case LiteralExpr ignored -> {
-                // Un literal (numero, string) no referencia ninguna variable.
-            }
+    // Igual que check, pero lanza SemanticException si hay errores
+    public static void validate(QueryNode query) {
+        List<String> errors = check(query);
+        if (!errors.isEmpty()) {
+            throw new SemanticException(String.join(System.lineSeparator(), errors));
         }
     }
 
-    private static void checkVariable(String name, Set<String> declared, String context) {
-        if (!declared.contains(name)) {
-            throw new SemanticException(
-                    "Undefined variable '" + name + "' used in " + context
-                            + ". Variable must be declared in a MATCH pattern before use.");
+    // Por cada patron, en orden: primero revisa sus propiedades contra lo ya declarado
+    // y DESPUES declara su variable. Asi (o {x: p.id}), (p) da error, pero (p), (o {x: p.id}) no.
+    private static void declarePatterns(List<NodePattern> patterns, Set<String> declared, List<String> errors) {
+        for (NodePattern node : patterns) {
+            String context = "properties of pattern (" + node.variable().orElse("") + ")";
+            node.properties().forEach(property ->
+                    errors.addAll(undefinedIn(property.value(), declared, context).toList()));
+            node.variable().ifPresent(declared::add);
         }
+    }
+
+    // Funcion pura: devuelve los errores de una expresion (recorre el arbol con switch).
+    private static Stream<String> undefinedIn(Expression expr, Set<String> declared, String context) {
+        return switch (expr) {
+            case VariableExpr(var name) -> undefinedName(name, declared, context);
+            case PropertyLookup(var variable, var property) -> undefinedName(variable.name(), declared, context);
+            case BinaryExpr(var left, var operator, var right) ->
+                    Stream.concat(undefinedIn(left, declared, context), undefinedIn(right, declared, context));
+            case LiteralExpr literal -> Stream.empty();
+        };
+    }
+
+    private static Stream<String> undefinedName(String name, Set<String> declared, String context) {
+        return declared.contains(name)
+                ? Stream.empty()
+                : Stream.of("Undefined variable '" + name + "' used in " + context
+                            + ". Variables must be declared in a pattern before use.");
     }
 }
