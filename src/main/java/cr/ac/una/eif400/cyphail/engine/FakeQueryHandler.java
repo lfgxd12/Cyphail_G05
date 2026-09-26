@@ -10,6 +10,14 @@ import java.io.FileReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+/*
+ * Cyphail - Graph Query Engine Prototype
+ * EIF400-II-2026 - Escuela de Informatica, UNA
+ * Grupo: G05
+ * Autores: Luis Felipe Jimenez Fernandez, Jose David Chavarria Villalobos,
+ * Jostin Jimenez Alfaro, Angel Rojas Ruano
+ */
+
 public class FakeQueryHandler {
 
     public static void process(String query) {
