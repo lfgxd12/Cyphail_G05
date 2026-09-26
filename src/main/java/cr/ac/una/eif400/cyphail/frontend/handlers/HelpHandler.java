@@ -9,6 +9,7 @@ import cr.ac.una.eif400.cyphail.frontend.ReplCommand;
  * Autores: Luis Felipe Jimenez Fernandez, Jose David Chavarria Villalobos,
  *          Jostin Jimenez Alfaro, Angel Rojas Ruano
  */
+
 public class HelpHandler implements ReplCommand {
     @Override
     public void execute(String args) {
@@ -22,6 +23,8 @@ public class HelpHandler implements ReplCommand {
 
             Engine Queries:
               Type Cyphail statements directly (e.g., MATCH (p:Persona) RETURN p.nombre, p.edad)
+              Queries may span several lines: they run when complete (with RETURN),
+              or finish them with ";" or an empty line.
             """);
     }
 }
