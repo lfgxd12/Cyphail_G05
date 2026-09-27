@@ -98,7 +98,7 @@ public class Repl {
         return true;
     }
 
-    private void runStatement(String text) {
+    void runStatement(String text) {
     String statement = MultilineInput.clean(text);
 
     if (MultilineInput.isTreeCommand(statement)) {
