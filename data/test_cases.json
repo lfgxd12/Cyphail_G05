@@ -16,5 +16,59 @@
       ["El Principito", "96"],
       ["Rebelion en la Granja", "112"]
     ]
+  },
+  {
+    "id": "case_3",
+    "query": "MATCH (a:Person:Employee {id: 1}) WHERE a.age > 30 RETURN a.name AS name, a.age AS age",
+    "headers": ["name", "age"],
+    "data": [
+      ["Carlos", "42"]
+    ]
+  },
+  {
+    "id": "case_4",
+    "query": "MATCH (m:Movie), (p:Person) WHERE m.year > 2000 RETURN m.title AS title, p.name AS actor",
+    "headers": ["title", "actor"],
+    "data": [
+      ["Inception", "Ana"],
+      ["Interstellar", "Carlos"]
+    ]
+  },
+  {
+    "id": "case_5",
+    "query": "MATCH (m:Movie), (p:Person) WHERE m.year <> p.age RETURN m.title AS title, p.name AS name",
+    "headers": ["title", "name"],
+    "data": [
+      ["Matrix", "Ana"],
+      ["Inception", "Carlos"]
+    ]
+  },
+  {
+    "id": "case_6",
+    "query": "MATCH (m: Movie {year: 1999}), (p:Person {age: 40}) WHERE m.year <> p.age RETURN m.title AS title, p.name AS name",
+    "headers": ["title", "name"],
+    "data": [
+      ["Matrix", "Carlos"]
+    ]
+  },
+  {
+    "id": "case_7",
+    "query": "MATCH (p:Person) WHERE p.age > 18 CREATE (c:Certificate {issuedTo: \"adult\", year: 2026}) RETURN p.name AS name, p.age AS age",
+    "type": "confirmation",
+    "message": "OK. 1 node created."
+  },
+  {
+    "id": "case_8",
+    "query": "MATCH (p:Person {id: 1}), (o:Order {personId: p.id}) RETURN p.name AS name, o.total AS total",
+    "headers": ["name", "total"],
+    "data": [
+      ["Ana", "125.50"]
+    ]
+  },
+  {
+    "id": "case_9",
+    "query": "MATCH (p:Person), (o:Order {personId: p.id, status: \"cancelled\"}) WHERE p.age > 60 CREATE (a:Archive {id: o.id, name: \"retired\", year: 2026}) DELETE o RETURN p.name AS name",
+    "type": "confirmation",
+    "message": "OK. 1 node created. 1 node deleted."
   }
 ]
