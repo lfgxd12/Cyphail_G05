@@ -1,6 +1,12 @@
 package cr.ac.una.eif400.cyphail.frontend;
 
-import cr.ac.una.eif400.cyphail.engine.FakeQueryHandler;
+import cr.ac.una.eif400.cyphail.ast.QueryNode;
+import cr.ac.una.eif400.cyphail.engine.JsonFakeBroker;
+import cr.ac.una.eif400.cyphail.parser.CyphailParser;
+import cr.ac.una.eif400.cyphail.parser.core.Fail;
+import cr.ac.una.eif400.cyphail.parser.core.Ok;
+import cr.ac.una.eif400.cyphail.validation.SemanticException;
+import cr.ac.una.eif400.cyphail.validation.VariableScopeChecker;
 import cr.ac.una.eif400.cyphail.frontend.handlers.*;
 
 import java.util.HashMap;
@@ -92,14 +98,34 @@ public class Repl {
         return true;
     }
 
-    // Ejecuta una entrada completa (posiblemente de varias lineas): .tree o consulta al motor fake
-    // Pd. arreglar en el siguiente sprint
     private void runStatement(String text) {
-        String statement = MultilineInput.clean(text);
-        if (MultilineInput.isTreeCommand(statement)) {
-            commands.get(".tree").execute(MultilineInput.withoutTreeCommand(statement));
-        } else {
-            FakeQueryHandler.process(statement);
+    String statement = MultilineInput.clean(text);
+
+    if (MultilineInput.isTreeCommand(statement)) {
+        commands.get(".tree").execute(
+                MultilineInput.withoutTreeCommand(statement)
+        );
+        return;
+    }
+
+    switch (CyphailParser.parse(statement)) {
+
+        case Fail(String reason) ->
+                System.out.println(
+                        "ERROR: Syntax error. " + reason
+                );
+
+        case Ok(QueryNode query, var rest) -> {
+            try {
+                VariableScopeChecker.validate(query);
+                JsonFakeBroker.resolve(query, statement);
+
+            } catch (SemanticException e) {
+                System.out.println(
+                        "ERROR: " + e.getMessage()
+                );
+            }
         }
     }
+}
 }
