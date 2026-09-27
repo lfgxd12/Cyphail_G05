@@ -48,3 +48,16 @@
    documento de casos de prueba y en el ejemplo del SPEC), sin cambiar el comportamiento para una
    consulta de una sola línea. Se agregaron pruebas (`MultilineInputTest`).
 10. **Documentación:** se pidió ayuda para redactar este archivo y el `README.md` del proyecto.
+
+### Integración final del REPL y datos fake
+
+* **Modelo utilizado:** ChatGPT (GPT-5.6)
+* **Propósito:** Asistencia para revisar la implementación existente, integrar los componentes del REPL y desarrollar pruebas de integración.
+
+### Registro
+1. **`JsonFakeBroker`**: se solicitó ayuda para implementar la lectura de `data/test_cases.json` mediante Gson, normalizar las consultas y generar respuestas de tipo tabla o confirmación.
+2. **Integración del REPL** (`Repl.java`): se solicitó ayuda para conectar el flujo `CyphailParser -> VariableScopeChecker -> JsonFakeBroker`, evitando que consultas con errores sintácticos o semánticos lleguen al broker.
+3. **Casos C3-C9** (`data/test_cases.json`): se solicitó ayuda para agregar los datos fake correspondientes a los casos oficiales, incluyendo respuestas tabulares y confirmaciones para operaciones de actualización.
+4. **Comando `.use`** (`UseHandler.java`): se solicitó ayuda para eliminar la lista de grafos hardcodeada y cargar la información desde `data/graphs.json` mediante Gson.
+5. **Pruebas** (`JsonFakeBrokerTest`, `ReplIntegrationTest`): se solicitó ayuda para crear pruebas del broker y de la integración del REPL, incluyendo consultas con `RETURN`, confirmaciones de `CREATE`, errores sintácticos y variables no declaradas.
+6. **Revisión y depuración**: se utilizó el asistente para revisar errores de compilación, configuración de Java 26 y verificar la integración con la estructura existente del repositorio.
