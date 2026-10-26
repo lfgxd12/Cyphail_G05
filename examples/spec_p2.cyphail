@@ -1,0 +1,43 @@
+// Ejemplos del SPEC del Sprint P2 (EIF400-II-2026, prof. C. Loria-Saenz).
+// Cada estatuto termina en ";". Es el corpus de aceptacion del parser, del codegen y de .load.
+
+// ---- II.3 Patrones de relaciones ----
+MATCH (p:Persona)-[:TRABAJA_EN]->(e:Empresa),
+      (c:Persona)-[:TRABAJA_EN]->(e)
+WHERE p.nombre <> c.nombre
+RETURN p.nombre, c.nombre, e.nombre;
+
+// ---- II.4 CREATE, DELETE, SET y REMOVE ----
+MATCH (a:Autor {nombre: 'Bill Gates'}),
+      (b:Libro {titulo: 'Fake Windows Millenium'})
+CREATE (a)-[:ESCRIBIO]->(b);
+
+CREATE (a:Persona {nombre: 'Marta'})
+    -[r:TRABAJA_EN {rol: 'Dev'}]->(e:Empresa
+                                {nombre: 'UCR'})
+RETURN a, r, e;
+
+MATCH (a:Person:Female)-[r:KNOWS]->(b:Person:Male)
+WHERE r.since < 2000
+DELETE r;
+
+MATCH (p:Product {code: "PROD-99"})
+SET p.precio = 19.99
+RETURN p;
+
+MATCH (p:Product {code: "PROD-99"})
+REMOVE p.discount
+RETURN p.id;
+
+MATCH
+(u:Student {id: "4-666-000"})
+-[r:attends]->
+(c:Course {nrc: "50691"})
+SET r.grade = 9.5
+RETURN u.id, r.grade;
+
+// ---- Ejemplo del transpilador (grafo amigos) ----
+MATCH (a) -[:amigo]-> (b),
+      (b) -[:amigo]-> (a)
+WHERE a.age > 18 AND a.age = b.age
+RETURN a.name, b.name;
