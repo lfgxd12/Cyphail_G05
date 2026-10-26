@@ -64,7 +64,7 @@ public class CyphailLexers {
 
     // Identificadores y Literales
     public static Lexer Id()     { return token("[a-zA-Z_]\\w*", TToken.ID, "Expected Identifier"); }
-    public static Lexer Number() { return token("[\\+-]?\\d+", TToken.NUM, "Expected Number"); }
+    public static Lexer Number() { return token("[\\+-]?\\d+(?:\\.\\d+)?", TToken.NUM, "Expected Number"); }
     public static Lexer String() { return token("\"[^\"]*\"|'[^']*'", TToken.STRING, "Expected String"); }
 
     // Palabras Clave:
@@ -79,4 +79,27 @@ public class CyphailLexers {
     // Palabras Clave para Operadores:
     public static Lexer Gte()    { return token(">=", TToken.GTE, "Expected '>='"); }
     public static Lexer Lte()    { return token("<=", TToken.LTE, "Expected '<='"); }
+
+    // ---------------- P2: relaciones, SET y operadores logicos ----------------
+
+    // Palabra clave SET (el token SET ya existia en TToken)
+    public static Lexer Set()    { return token("(?i)SET\\b", TToken.SET, "Expected SET"); }
+
+    // Operadores logicos, sin distinguir mayusculas; \\b evita leer "ANDROID" como AND
+    public static Lexer And()    { return token("(?i)AND\\b", TToken.AND, "Expected AND"); }
+    public static Lexer Or()     { return token("(?i)OR\\b", TToken.OR, "Expected OR"); }
+    public static Lexer Not()    { return token("(?i)NOT\\b", TToken.NOT, "Expected NOT"); }
+
+    // Corchetes del detalle de una relacion: [r:TIPO {clave: valor}]
+    public static Lexer LBracket() { return token("\\[", TToken.LBRACKET, "Expected '['"); }
+    public static Lexer RBracket() { return token("\\]", TToken.RBRACKET, "Expected ']'"); }
+
+    // Tipos alternativos de relacion: [:A|B]
+    public static Lexer Pipe()   { return token("\\|", TToken.PIPE, "Expected '|'"); }
+
+    // Flechas. OJO: "->" y "<-" miden 2 caracteres. El parser debe probar Arrow ANTES que Dash
+    // (si no, Dash se come el guion y sobra ">"). Dash se usa solo donde se espera una relacion.
+    public static Lexer Dash()   { return token("-", TToken.DASH, "Expected '-'"); }
+    public static Lexer Arrow()  { return token("->", TToken.ARROW, "Expected '->'"); }
+    public static Lexer LArrow() { return token("<-", TToken.LARROW, "Expected '<-'"); }
 }

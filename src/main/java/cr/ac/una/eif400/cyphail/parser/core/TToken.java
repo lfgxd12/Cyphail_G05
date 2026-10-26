@@ -14,9 +14,15 @@ public enum TToken {
     // "REMOVE" como extra
     MATCH, WHERE, RETURN, AS, CREATE, DELETE, DETACH, SET, REMOVE,
 
+    // Operadores logicos (P2)
+    AND, OR, NOT,
+
     // Símbolos y operadores
     LPAREN, RPAREN, LBRACE, RBRACE, COLON, COMMA, DOT,
     GT, LT, GTE, LTE, EQ, NEQ,
+
+    // Simbolos de relaciones (P2): -  ->  <-  [  ]  |
+    DASH, ARROW, LARROW, LBRACKET, RBRACKET, PIPE,
 
     // Identificadores y Literales
     ID, NUM, STRING,
