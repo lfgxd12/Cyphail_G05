@@ -10,8 +10,8 @@ import java.util.List;
  * Jostin Jimenez Alfaro, Angel Rojas Ruano
  */
 
-// MATCH (a), (b), ... -> una lista de patrones de nodo separados por coma.
-public record MatchClause(List<NodePattern> patterns) implements Clause {
+// MATCH patron, patron, ... -> una lista de caminos separados por coma.
+public record MatchClause(List<PathPattern> patterns) implements Clause {
     public MatchClause {
         patterns = List.copyOf(patterns);
     }

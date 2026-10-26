@@ -8,5 +8,5 @@ package cr.ac.una.eif400.cyphail.ast;
  * Jostin Jimenez Alfaro, Angel Rojas Ruano
  */
 
-public sealed interface UpdatingClause extends Clause permits CreateClause, DeleteClause, RemoveClause {
+public sealed interface UpdatingClause extends Clause permits CreateClause, DeleteClause, RemoveClause, SetClause {
 }

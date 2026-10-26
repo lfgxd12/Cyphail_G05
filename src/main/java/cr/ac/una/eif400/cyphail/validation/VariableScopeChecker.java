@@ -23,7 +23,7 @@ public class VariableScopeChecker {
         Set<String> declared = new HashSet<>();
         List<String> errors = new ArrayList<>();
 
-        declarePatterns(query.match().patterns(), declared, errors);
+        declarePatterns(query.match().map(MatchClause::patterns).orElse(List.of()), declared, errors);
 
         query.where().ifPresent(where ->
                 errors.addAll(undefinedIn(where.condition(), declared, "WHERE clause").toList()));
@@ -35,6 +35,10 @@ public class VariableScopeChecker {
                         errors.addAll(undefinedIn(item, declared, "DELETE clause").toList()));
                 case RemoveClause(var items) -> items.forEach(item ->
                         errors.addAll(undefinedIn(item, declared, "REMOVE clause").toList()));
+                case SetClause(var items) -> items.forEach(item -> {
+                    errors.addAll(undefinedIn(item.target(), declared, "SET clause").toList());
+                    errors.addAll(undefinedIn(item.value(), declared, "SET clause").toList());
+                });
             }
         }
 
@@ -54,13 +58,29 @@ public class VariableScopeChecker {
 
     // Por cada patron, en orden: primero revisa sus propiedades contra lo ya declarado
     // y DESPUES declara su variable. Asi (o {x: p.id}), (p) da error, pero (p), (o {x: p.id}) no.
-    private static void declarePatterns(List<NodePattern> patterns, Set<String> declared, List<String> errors) {
-        for (NodePattern node : patterns) {
-            String context = "properties of pattern (" + node.variable().orElse("") + ")";
-            node.properties().forEach(property ->
-                    errors.addAll(undefinedIn(property.value(), declared, context).toList()));
-            node.variable().ifPresent(declared::add);
+    // Dentro de un camino se respeta el orden de escritura: nodo, relacion, nodo, relacion...
+    private static void declarePatterns(List<PathPattern> paths, Set<String> declared, List<String> errors) {
+        for (PathPattern path : paths) {
+            declareNode(path.start(), declared, errors);
+            for (Step step : path.steps()) {
+                declareRelationship(step.relationship(), declared, errors);
+                declareNode(step.node(), declared, errors);
+            }
         }
+    }
+
+    private static void declareNode(NodePattern node, Set<String> declared, List<String> errors) {
+        String context = "properties of pattern (" + node.variable().orElse("") + ")";
+        node.properties().forEach(property ->
+                errors.addAll(undefinedIn(property.value(), declared, context).toList()));
+        node.variable().ifPresent(declared::add);
+    }
+
+    private static void declareRelationship(RelPattern rel, Set<String> declared, List<String> errors) {
+        String context = "properties of relationship [" + rel.variable().orElse("") + "]";
+        rel.properties().forEach(property ->
+                errors.addAll(undefinedIn(property.value(), declared, context).toList()));
+        rel.variable().ifPresent(declared::add);
     }
 
     // Funcion pura: devuelve los errores de una expresion (recorre el arbol con switch).
@@ -70,6 +90,7 @@ public class VariableScopeChecker {
             case PropertyLookup(var variable, var property) -> undefinedName(variable.name(), declared, context);
             case BinaryExpr(var left, var operator, var right) ->
                     Stream.concat(undefinedIn(left, declared, context), undefinedIn(right, declared, context));
+            case NotExpr(var operand) -> undefinedIn(operand, declared, context);
             case LiteralExpr literal -> Stream.empty();
         };
     }

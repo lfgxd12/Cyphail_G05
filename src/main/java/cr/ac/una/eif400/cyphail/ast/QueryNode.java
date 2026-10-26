@@ -11,9 +11,9 @@ import java.util.Optional;
  * Jostin Jimenez Alfaro, Angel Rojas Ruano
  */
 
-// Una consulta: MATCH [WHERE] (CREATE | DELETE | REMOVE)* [RETURN]
+// Una consulta: [MATCH [WHERE]] (CREATE | SET | DELETE | REMOVE)* [RETURN]
 public record QueryNode(
-        MatchClause match,
+        Optional<MatchClause> match,
         Optional<WhereClause> where,
         List<UpdatingClause> updates,
         Optional<ReturnClause> returnClause

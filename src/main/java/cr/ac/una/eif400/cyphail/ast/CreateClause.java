@@ -11,7 +11,7 @@ import java.util.List;
  */
 
 // CREATE pattern: reutiliza la misma regla "pattern" que MATCH.
-public record CreateClause(List<NodePattern> patterns) implements UpdatingClause {
+public record CreateClause(List<PathPattern> patterns) implements UpdatingClause {
     public CreateClause {
         patterns = List.copyOf(patterns);
     }

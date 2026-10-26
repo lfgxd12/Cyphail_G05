@@ -8,4 +8,20 @@ package cr.ac.una.eif400.cyphail.ast;
  * Jostin Jimenez Alfaro, Angel Rojas Ruano
  */
 
-public record LiteralExpr(String value) implements Expression { }
+// Un literal tal como se escribio: con comillas es un string ("adult", 'Marta') y sin ellas es un numero (19.99).
+// Se guarda como texto; isString() e isNumber() le dicen al Codegen de que clase es.
+public record LiteralExpr(String value) implements Expression {
+
+    public boolean isString() {
+        return value.startsWith("\"") || value.startsWith("'");
+    }
+
+    public boolean isNumber() {
+        return !isString();
+    }
+
+    // El texto sin las comillas de los extremos: "adult" -> adult. Un numero se devuelve igual.
+    public String text() {
+        return isString() ? value.substring(1, value.length() - 1) : value;
+    }
+}

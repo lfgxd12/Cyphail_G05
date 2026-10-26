@@ -8,5 +8,5 @@ package cr.ac.una.eif400.cyphail.ast;
  * Jostin Jimenez Alfaro, Angel Rojas Ruano
  */
 
-public sealed interface Expression permits BinaryExpr, PropertyLookup, VariableExpr, LiteralExpr {
+public sealed interface Expression permits BinaryExpr, PropertyLookup, VariableExpr, LiteralExpr, NotExpr {
 }

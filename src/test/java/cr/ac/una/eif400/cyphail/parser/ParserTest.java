@@ -32,8 +32,9 @@ class ParserTest {
         assertInstanceOf(Fail.class, CyphailParser.parse(query), "Should be a syntax error: " + query);
     }
 
-    private static NodePattern node(String variable, List<String> labels, List<Property> properties) {
-        return new NodePattern(Optional.of(variable), labels, properties);
+    // Un nodo suelto, envuelto en su camino sin pasos
+    private static PathPattern node(String variable, List<String> labels, List<Property> properties) {
+        return new PathPattern(new NodePattern(Optional.of(variable), labels, properties), List.of());
     }
 
     private static PropertyLookup prop(String variable, String property) {
@@ -48,7 +49,7 @@ class ParserTest {
                        m.year AS year
                 """);
 
-        assertEquals(List.of(node("m", List.of("Movie"), List.of())), query.match().patterns());
+        assertEquals(List.of(node("m", List.of("Movie"), List.of())), query.match().orElseThrow().patterns());
         assertTrue(query.where().isEmpty());
         assertTrue(query.updates().isEmpty());
         assertEquals(List.of(
@@ -82,7 +83,7 @@ class ParserTest {
 
         assertEquals(List.of(node("a", List.of("Person", "Employee"),
                         List.of(new Property("id", new LiteralExpr("1"))))),
-                query.match().patterns());
+                query.match().orElseThrow().patterns());
     }
 
     @Test
@@ -97,7 +98,7 @@ class ParserTest {
         assertEquals(List.of(
                 node("m", List.of("Movie"), List.of()),
                 node("p", List.of("Person"), List.of())
-        ), query.match().patterns());
+        ), query.match().orElseThrow().patterns());
     }
 
     @Test
@@ -126,7 +127,7 @@ class ParserTest {
         assertEquals(List.of(
                 node("m", List.of("Movie"), List.of(new Property("year", new LiteralExpr("1999")))),
                 node("p", List.of("Person"), List.of(new Property("age", new LiteralExpr("40"))))
-        ), query.match().patterns());
+        ), query.match().orElseThrow().patterns());
     }
 
     @Test
@@ -153,7 +154,7 @@ class ParserTest {
                        o.total AS total
                 """);
 
-        NodePattern order = query.match().patterns().get(1);
+        NodePattern order = query.match().orElseThrow().patterns().get(1).start();
         assertEquals(List.of(new Property("personId", prop("p", "id"))), order.properties());
     }
 
@@ -169,7 +170,7 @@ class ParserTest {
 
         assertEquals(2, query.updates().size());
         CreateClause create = assertInstanceOf(CreateClause.class, query.updates().get(0));
-        assertEquals(List.of("Archive"), create.patterns().get(0).labels());
+        assertEquals(List.of("Archive"), create.patterns().get(0).start().labels());
         assertEquals(new DeleteClause(false, List.of(new VariableExpr("o"))), query.updates().get(1));
     }
 
@@ -195,7 +196,7 @@ class ParserTest {
                 RETURN p.name AS name
                 """);
 
-        assertEquals(Optional.of("o"), query.match().patterns().get(0).variable());
+        assertEquals(Optional.of("o"), query.match().orElseThrow().patterns().get(0).start().variable());
         assertEquals(2, query.updates().size());
     }
 
@@ -217,7 +218,8 @@ class ParserTest {
     @Test
     void anonymousNodeAndComments_areAccepted() {
         QueryNode query = parseOrFail("MATCH () // nodo sin variable ni etiqueta\n RETURN 1");
-        assertEquals(List.of(new NodePattern(Optional.empty(), List.of(), List.of())), query.match().patterns());
+        assertEquals(List.of(new PathPattern(new NodePattern(Optional.empty(), List.of(), List.of()), List.of())),
+                query.match().orElseThrow().patterns());
     }
 
     @Test

@@ -1,10 +1,13 @@
 package cr.ac.una.eif400.cyphail.output;
 
-import cr.ac.una.eif400.cyphail.ast.QueryNode;
+import cr.ac.una.eif400.cyphail.ast.*;
 import cr.ac.una.eif400.cyphail.parser.CyphailParser;
 import cr.ac.una.eif400.cyphail.parser.core.Fail;
 import cr.ac.una.eif400.cyphail.parser.core.Ok;
 import org.junit.jupiter.api.Test;
+
+import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -77,5 +80,74 @@ class TreePrinterTest {
     void expressionsArePrintedInPreorder() {
         QueryNode query = parseOrFail("MATCH (m:Movie), (p:Person) WHERE m.year <> p.age RETURN m");
         assertTrue(TreePrinter.print(query).contains("Expr: (<> (. m year) (. p age))"));
+    }
+
+    @Test
+    void pathWithRelationship_isPrintedWithItsDirection() {
+        var a = new NodePattern(Optional.of("a"), List.of("Person"), List.of());
+        var b = new NodePattern(Optional.of("b"), List.of("Person"), List.of());
+        var rel = new RelPattern(Optional.of("r"), List.of("amigo"),
+                List.of(new Property("since", new LiteralExpr("2000"))), Direction.OUT);
+        var path = new PathPattern(a, List.of(new Step(rel, b)));
+        var query = new QueryNode(Optional.of(new MatchClause(List.of(path))), Optional.empty(),
+                List.of(), Optional.empty());
+
+        String expected = """
+                Query{
+                  Match: {
+                    Patterns: [
+                      Path: {
+                        PatternNode: {
+                          var: a
+                          labels: [ Person ]
+                          properties: []
+                        }
+                        Steps: [
+                          Step: {
+                            RelPattern: {
+                              var: r
+                              types: [ amigo ]
+                              properties: [ {since: 2000} ]
+                              direction: OUT
+                            }
+                            PatternNode: {
+                              var: b
+                              labels: [ Person ]
+                              properties: []
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                  Updates: []
+                }""";
+
+        assertEquals(expected, TreePrinter.print(query));
+    }
+
+    @Test
+    void setAndNot_arePrintedInPreorder() {
+        var node = new PathPattern(new NodePattern(Optional.of("p"), List.of(), List.of()), List.of());
+        var where = new WhereClause(new NotExpr(new BinaryExpr(
+                new PropertyLookup(new VariableExpr("p"), "age"), "<", new LiteralExpr("18"))));
+        var set = new SetClause(List.of(new SetItem(
+                new PropertyLookup(new VariableExpr("p"), "precio"), new LiteralExpr("19.99"))));
+        var query = new QueryNode(Optional.of(new MatchClause(List.of(node))), Optional.of(where),
+                List.of(set), Optional.empty());
+
+        String tree = TreePrinter.print(query);
+        assertTrue(tree.contains("Expr: (NOT (< (. p age) 18))"));
+        assertTrue(tree.contains("(= (. p precio) 19.99)"));
+    }
+
+    @Test
+    void createWithoutMatch_hasNoMatchSection() {
+        var path = new PathPattern(new NodePattern(Optional.of("a"), List.of("Persona"), List.of()), List.of());
+        var query = new QueryNode(Optional.empty(), Optional.empty(),
+                List.of(new CreateClause(List.of(path))), Optional.empty());
+
+        assertFalse(TreePrinter.print(query).contains("Match:"));
+        assertTrue(TreePrinter.print(query).contains("Create: {"));
     }
 }

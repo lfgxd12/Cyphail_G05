@@ -4,6 +4,7 @@ import cr.ac.una.eif400.cyphail.ast.*;
 import cr.ac.una.eif400.cyphail.parser.core.*;
 
 import java.util.List;
+import java.util.Optional;
 
 /*
  * Cyphail - Graph Query Engine Prototype
@@ -81,9 +82,12 @@ public class CyphailParser {
         return Parsers.Between(CyphailLexers.LParen(), inside, CyphailLexers.RParen());
     }
 
-    // pattern : nodePattern ("," nodePattern)*
-    private static Parser<InputString, List<NodePattern>, String> pattern() {
-        return Parsers.SepBy1(nodePattern(), CyphailLexers.Comma());
+    // pattern : path ("," path)*
+    // Por ahora un camino es solo un nodo (sin relaciones): PathPattern(nodo, sin pasos)
+    private static Parser<InputString, List<PathPattern>, String> pattern() {
+        return Parsers.SepBy1(
+                Parsers.Map(nodePattern(), node -> new PathPattern(node, List.of())),
+                CyphailLexers.Comma());
     }
 
     // ---------------- Clausulas ----------------
@@ -139,7 +143,7 @@ public class CyphailParser {
                 Parsers.FlatMap(Parsers.Opt(whereClause()), where ->
                         Parsers.FlatMap(Parsers.Many(updatingClause()), updates ->
                                 Parsers.Map(Parsers.Left(Parsers.Opt(returnClause()), CyphailLexers.Eof()),
-                                        ret -> new QueryNode(match, where, updates, ret)))));
+                                        ret -> new QueryNode(Optional.of(match), where, updates, ret)))));
     }
 
     public static Result<InputString, QueryNode, String> parse(String input) {
