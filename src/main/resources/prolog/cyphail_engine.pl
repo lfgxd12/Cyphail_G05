@@ -64,20 +64,9 @@ user_amigos_edge(e3, amigo, id1, id4).
 user_amigos_edge(e4, amigo, id3, id1).
 
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% PASO 1 — Comparadores y formato de Rows
-% (Persona 4 - Angel)
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%% Comparadores %%%%%%%%%%
+% Los genera el Codegen para traducir =, <>, >, <, >=, <=. Fallan en silencio, nunca lanzan error.
 
-%% --- Comparadores ---
-%  Los genera el Codegen para traducir "=", "<>", ">", "<", ">=", "<=".
-%  Contrato: todos de 2 argumentos; FALLAN EN SILENCIO (nunca lanzan error),
-%  igual que cualquier otro goal de Prolog que no se cumple.
-
-%! cy_eq(?X, ?Y) is semidet.
-%  "=" de Cyphail. Si ambos son numeros, compara por VALOR (30 =:= 30.0
-%  es verdadero). Si no, por identidad de terminos (==), para que
-%  'Juan Perez' == 'Juan Perez' sea verdadero pero 'Juan' \== 'Maria'.
 cy_eq(X, Y) :-
     number(X), number(Y),
     !,
@@ -85,53 +74,29 @@ cy_eq(X, Y) :-
 cy_eq(X, Y) :-
     X == Y.
 
-%! cy_neq(?X, ?Y) is semidet.
-%  "<>" de Cyphail: lo contrario exacto de cy_eq.
 cy_neq(X, Y) :-
     \+ cy_eq(X, Y).
 
-%! cy_gt(?X, ?Y) is semidet.
-%! cy_lt(?X, ?Y) is semidet.
-%! cy_gte(?X, ?Y) is semidet.
-%! cy_lte(?X, ?Y) is semidet.
-%  ">" "<" ">=" "<=" de Cyphail. Solo tienen sentido entre numeros: si
-%  cualquiera de los dos no lo es, el predicado simplemente FALLA (no
-%  lanza excepcion), igual que pasaria comparando texto con numero.
 cy_gt(X, Y)  :- number(X), number(Y), X > Y.
 cy_lt(X, Y)  :- number(X), number(Y), X < Y.
 cy_gte(X, Y) :- number(X), number(Y), X >= Y.
 cy_lte(X, Y) :- number(X), number(Y), X =< Y.
 
 
-%% --- Formato de Rows (contrato C2, el mismo que RowsTable en Java) ---
-%
-%   Rows   := Header ("\n" Fila)*       sin filas -> solo el Header
-%                                        sin columnas -> string vacio
-%   Header := col (" " col)*            nombres de columna tal cual, sin comillas
-%   Fila   := celda (" " celda)*        una celda por columna, SIEMPRE con comillas
-%   celda  := '"' contenido '"'         dentro: \ -> \\   " -> \"   salto de linea -> \n
+%%%%%%%%%% Formato de Rows (contrato C2) %%%%%%%%%%
+% Encabezado + filas separadas por \n; cada celda entre comillas, con \, " y \n escapados.
 
-%! cy_cell(+Valor, -Celda:string) is det.
-%  Convierte un valor cualquiera (atomo, string o numero) en una celda
-%  de Rows: su texto, con \, " y saltos de linea escapados, entre
-%  comillas dobles. 30 -> "30" ; 'Juan Perez' -> "Juan Perez".
 cy_cell(Valor, Celda) :-
     cy_valor_texto(Valor, Texto),
     cy_escapar(Texto, Escapado),
     format(string(Celda), "\"~w\"", [Escapado]).
 
-%! cy_valor_texto(+Valor, -Texto:string) is det.
-%  Texto "crudo" (sin comillas ni escapes) de un valor del grafo.
 cy_valor_texto(Valor, Texto) :-
     ( number(Valor)
     -> format(string(Texto), "~w", [Valor])
     ;  atom_string(Valor, Texto)
     ).
 
-%! cy_escapar(+Texto:string, -Escapado:string) is det.
-%  Aplica, en orden, \ -> \\ , " -> \" , salto de linea -> \n.
-%  El orden importa: si se escapara " antes de \, la barra que ese
-%  escape agrega se volveria a escapar.
 cy_escapar(Texto, Escapado) :-
     string_codes(Texto, Codigos),
     maplist(cy_escapar_codigo, Codigos, Partes),
@@ -145,11 +110,7 @@ cy_escapar_codigo(Codigo, Caracter) :-
     char_code(Char, Codigo),
     atom_string(Char, Caracter).
 
-%! cy_format_rows(+Columnas:list(atom), +Filas:list(list), -Rows:string) is det.
-%  Columnas = ['a.name','b.name'] ; Filas = lista de listas de valores
-%  (una lista por fila, un valor por columna, en el mismo orden).
-%  Sin columnas (cabeza sin argumentos, p. ej. un CREATE sin RETURN) ->
-%  Rows es el string vacio, sin importar cuantas filas haya.
+% Sin columnas (cabeza sin argumentos, p. ej. un CREATE sin RETURN) -> Rows vacio
 cy_format_rows(Columnas, _Filas, "") :-
     Columnas == [],
     !.
@@ -162,3 +123,22 @@ cy_format_rows(Columnas, Filas, Rows) :-
 cy_format_fila(Valores, FilaTexto) :-
     maplist(cy_cell, Valores, Celdas),
     atomic_list_concat(Celdas, ' ', FilaTexto).
+
+
+%%%%%%%%%% Ciclo de vida de una consulta %%%%%%%%%%
+% El Codegen encadena las tres en una sola peticion MQI.
+:- dynamic cy_stored/2.
+
+cy_create_query(Id, Clausula) :-
+    gensym(cy_query_, Id),
+    assertz(cy_stored(Id, Clausula)).
+
+cy_exec_query(Id, Columnas, Rows) :-
+    cy_stored(Id, (Cabeza :- Cuerpo)),
+    !,
+    Cabeza =.. [_Nombre | Args],
+    findall(Args, Cuerpo, Filas),
+    cy_format_rows(Columnas, Filas, Rows).
+
+cy_erase_query(Id) :-
+    retractall(cy_stored(Id, _)).
