@@ -82,12 +82,80 @@ public class CyphailParser {
         return Parsers.Between(CyphailLexers.LParen(), inside, CyphailLexers.RParen());
     }
 
+    // ---------------- Relaciones (P2) ----------------
+
+    // Lo que va entre corchetes: [r:TIPO|OTRO {clave: valor}]. Todo es opcional.
+    private record RelDetail(Optional<String> variable, List<String> types, List<Property> properties) {
+    }
+
+    private static final RelDetail NO_DETAIL = new RelDetail(Optional.empty(), List.of(), List.of());
+
+    // types : (":" tipo ("|" tipo)*)?
+    private static Parser<InputString, List<String>, String> relTypes() {
+        Parser<InputString, List<String>, String> typeList =
+                Parsers.Right(CyphailLexers.Colon(), Parsers.SepBy1(ID, CyphailLexers.Pipe()));
+        return Parsers.Map(Parsers.Opt(typeList), found -> found.orElse(List.of()));
+    }
+
+    // detail : "[" variable? types? properties? "]"
+    private static Parser<InputString, RelDetail, String> relDetail() {
+        Parser<InputString, List<Property>, String> props =
+                Parsers.Map(Parsers.Opt(properties()), found -> found.orElse(List.of()));
+        Parser<InputString, RelDetail, String> inside =
+                Parsers.FlatMap(Parsers.Opt(ID), variable ->
+                        Parsers.FlatMap(relTypes(), types ->
+                                Parsers.Map(props, propList -> new RelDetail(variable, types, propList))));
+        return Parsers.Between(CyphailLexers.LBracket(), inside, CyphailLexers.RBracket());
+    }
+
+    // El detalle puede no venir: (a)-->(b)
+    private static Parser<InputString, RelDetail, String> optionalDetail() {
+        return Parsers.Map(Parsers.Opt(relDetail()), found -> found.orElse(NO_DETAIL));
+    }
+
+    private static RelPattern rel(RelDetail detail, Direction direction) {
+        return new RelPattern(detail.variable(), detail.types(), detail.properties(), direction);
+    }
+
+    // relationship : "<-" detail? "-"           -> IN    (a)<-[r]-(b)   (a)<--(b)
+    //              | "-" detail? "->"            -> OUT   (a)-[r]->(b)   (a)-->(b)
+    //              | "-" detail? "-"             -> NONE  (a)-[r]-(b)    (a)--(b)
+    // La direccion se decide DESPUES de leer el detalle, por eso se usa FlatMap.
+    // "->" se prueba antes que "-": si no, el guion se comeria la flecha.
+    private static Parser<InputString, RelPattern, String> relationship() {
+        Parser<InputString, RelPattern, String> incoming =
+                Parsers.FlatMap(CyphailLexers.LArrow(), ignored ->
+                        Parsers.FlatMap(optionalDetail(), detail ->
+                                Parsers.Map(CyphailLexers.Dash(), dash -> rel(detail, Direction.IN))));
+
+        Parser<InputString, RelPattern, String> outgoingOrNone =
+                Parsers.FlatMap(CyphailLexers.Dash(), ignored ->
+                        Parsers.FlatMap(optionalDetail(), detail -> {
+                            Parser<InputString, RelPattern, String> out =
+                                    Parsers.Map(CyphailLexers.Arrow(), arrow -> rel(detail, Direction.OUT));
+                            Parser<InputString, RelPattern, String> none =
+                                    Parsers.Map(CyphailLexers.Dash(), dash -> rel(detail, Direction.NONE));
+                            return Parsers.Or(out, none);
+                        }));
+
+        return Parsers.Or(incoming, outgoingOrNone);
+    }
+
+    // step : relationship nodePattern
+    private static Parser<InputString, Step, String> step() {
+        return Parsers.FlatMap(relationship(), relation ->
+                Parsers.Map(nodePattern(), node -> new Step(relation, node)));
+    }
+
+    // path : nodePattern step*        (sin pasos es un nodo suelto)
+    private static Parser<InputString, PathPattern, String> path() {
+        return Parsers.FlatMap(nodePattern(), start ->
+                Parsers.Map(Parsers.Many(step()), steps -> new PathPattern(start, steps)));
+    }
+
     // pattern : path ("," path)*
-    // Por ahora un camino es solo un nodo (sin relaciones): PathPattern(nodo, sin pasos)
     private static Parser<InputString, List<PathPattern>, String> pattern() {
-        return Parsers.SepBy1(
-                Parsers.Map(nodePattern(), node -> new PathPattern(node, List.of())),
-                CyphailLexers.Comma());
+        return Parsers.SepBy1(path(), CyphailLexers.Comma());
     }
 
     // ---------------- Clausulas ----------------
