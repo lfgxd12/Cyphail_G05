@@ -4,7 +4,10 @@ import cr.ac.una.eif400.cyphail.ast.*;
 import cr.ac.una.eif400.cyphail.parser.core.*;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Stream;
 
 /*
  * Cyphail - Graph Query Engine Prototype
@@ -20,11 +23,27 @@ public class CyphailParser {
     private static final Parser<InputString, String, String> ID =
             Parsers.Map(CyphailLexers.Id(), TokenString::value);
 
+    // Palabras reservadas: el lexer Id() las reconoce como identificadores cualquiera, asi que sin esto
+    // "WHERE NOT" se leeria como la variable "NOT" y "... AND RETURN" como la variable "RETURN".
+    private static final Set<String> RESERVED = Set.of(
+            "MATCH", "WHERE", "RETURN", "AS", "CREATE", "DELETE", "DETACH", "SET", "REMOVE", "AND", "OR", "NOT");
+
+    // Una variable en una expresion: un identificador que no es palabra reservada.
+    // El parser interno no consume nada: solo decide si deja pasar al nombre que ya se leyo.
+    private static Parser<InputString, String, String> variableName() {
+        return Parsers.FlatMap(ID, name -> source -> {
+            if (RESERVED.contains(name.toUpperCase(Locale.ROOT))) {
+                return new Fail<>("'" + name + "' is a reserved word and cannot be used as a variable");
+            }
+            return new Ok<>(name, source);
+        });
+    }
+
     // ---------------- Expresiones ----------------
 
     // propertyLookup : variable "." propiedad      ej. m.title
     private static Parser<InputString, PropertyLookup, String> propertyLookup() {
-        return Parsers.FlatMap(ID, variable ->
+        return Parsers.FlatMap(variableName(), variable ->
                 Parsers.Map(Parsers.Right(CyphailLexers.Dot(), ID),
                         property -> new PropertyLookup(new VariableExpr(variable), property)));
     }
@@ -34,7 +53,7 @@ public class CyphailParser {
     private static Parser<InputString, Expression, String> atom() {
         return Parsers.Choice(
                 Parsers.Map(propertyLookup(), lookup -> lookup),
-                Parsers.Map(ID, VariableExpr::new),
+                Parsers.Map(variableName(), VariableExpr::new),
                 Parsers.Map(CyphailLexers.Number(), token -> new LiteralExpr(token.value())),
                 Parsers.Map(CyphailLexers.String(), token -> new LiteralExpr(token.value())));
     }
@@ -47,14 +66,71 @@ public class CyphailParser {
                 CyphailLexers.Lt(), CyphailLexers.Gt(), CyphailLexers.Eq());
     }
 
-    // expression : atom (operador atom)?
-    // Si despues del atom viene un operador, se arma un BinaryExpr; si no, queda el atom solo
-    public static Parser<InputString, Expression, String> expression() {
-        return Parsers.FlatMap(atom(), left ->
+    // La gramatica de condiciones, de menor a mayor precedencia (la precedencia esta en la FORMA de la gramatica):
+    //   expression := orExpr
+    //   orExpr     := andExpr ("OR" andExpr)*
+    //   andExpr    := notExpr ("AND" notExpr)*
+    //   notExpr    := "NOT" notExpr | comparison
+    //   comparison := primary (operador primary)?
+    //   primary    := atom | "(" expression ")"
+    // Contrato con el Codegen: AND y OR se guardan como BinaryExpr con "AND" / "OR" en mayuscula.
+
+    // expression() y notExpr() se llaman a si mismas (por el parentesis y por NOT NOT x).
+    // Si se construyeran de golpe, la construccion no terminaria nunca: la lambda difiere el parser
+    // hasta el momento de parsear.
+    private static Parser<InputString, Expression, String> lazyExpression() {
+        return source -> expression().parse(source);
+    }
+
+    private static Parser<InputString, Expression, String> lazyNotExpr() {
+        return source -> notExpr().parse(source);
+    }
+
+    // primary : atom | "(" expression ")"
+    // Dentro de una expresion no hay nodos, asi que el parentesis no se confunde con el de un nodo
+    private static Parser<InputString, Expression, String> primary() {
+        return Parsers.Choice(
+                atom(),
+                Parsers.Between(CyphailLexers.LParen(), lazyExpression(), CyphailLexers.RParen()));
+    }
+
+    // comparison : primary (operador primary)?
+    // Si despues del primary viene un operador, se arma un BinaryExpr; si no, queda el primary solo
+    private static Parser<InputString, Expression, String> comparison() {
+        return Parsers.FlatMap(primary(), left ->
                 Parsers.Map(
                         Parsers.Opt(Parsers.FlatMap(comparisonOp(), op ->
-                                Parsers.Map(atom(), right -> new BinaryExpr(left, op.value(), right)))),
-                        comparison -> comparison.<Expression>map(binary -> binary).orElse(left)));
+                                Parsers.Map(primary(), right -> new BinaryExpr(left, op.value(), right)))),
+                        found -> found.<Expression>map(binary -> binary).orElse(left)));
+    }
+
+    // notExpr : "NOT" notExpr | comparison
+    private static Parser<InputString, Expression, String> notExpr() {
+        Parser<InputString, Expression, String> negated =
+                Parsers.Map(Parsers.Right(CyphailLexers.Not(), lazyNotExpr()), NotExpr::new);
+        return Parsers.Choice(negated, comparison());
+    }
+
+    // operando (palabra operando)*  -> asociativo a la izquierda: a AND b AND c = (a AND b) AND c
+    // El pliegue (reduce) arma el BinaryExpr de izquierda a derecha, sin ciclos ni variables mutables.
+    private static Parser<InputString, Expression, String> leftAssociative(
+            Parser<InputString, Expression, String> operand,
+            Parser<InputString, TokenString, String> keyword,
+            String operator) {
+        return Parsers.FlatMap(operand, first ->
+                Parsers.Map(Parsers.Many(Parsers.Right(keyword, operand)),
+                        rest -> rest.stream().reduce(first,
+                                (left, right) -> new BinaryExpr(left, operator, right))));
+    }
+
+    // andExpr : notExpr ("AND" notExpr)*
+    private static Parser<InputString, Expression, String> andExpr() {
+        return leftAssociative(notExpr(), CyphailLexers.And(), "AND");
+    }
+
+    // expression : andExpr ("OR" andExpr)*
+    public static Parser<InputString, Expression, String> expression() {
+        return leftAssociative(andExpr(), CyphailLexers.Or(), "OR");
     }
 
     // ---------------- Patrones ----------------
@@ -184,9 +260,21 @@ public class CyphailParser {
                 RemoveClause::new);
     }
 
-    // updatingClause : createClause | deleteClause | removeClause
+    // setItem : propertyLookup "=" expression      ej. p.precio = 19.99
+    private static Parser<InputString, SetItem, String> setItem() {
+        return Parsers.FlatMap(Parsers.Left(propertyLookup(), CyphailLexers.Eq()), target ->
+                Parsers.Map(expression(), value -> new SetItem(target, value)));
+    }
+
+    // setClause : "SET" setItem ("," setItem)*
+    private static Parser<InputString, UpdatingClause, String> setClause() {
+        return Parsers.Map(Parsers.Right(CyphailLexers.Set(), Parsers.SepBy1(setItem(), CyphailLexers.Comma())),
+                SetClause::new);
+    }
+
+    // updatingClause : createClause | setClause | deleteClause | removeClause
     private static Parser<InputString, UpdatingClause, String> updatingClause() {
-        return Parsers.Choice(createClause(), deleteClause(), removeClause());
+        return Parsers.Choice(createClause(), setClause(), deleteClause(), removeClause());
     }
 
     // returnItem : expression ("AS" alias)?
@@ -203,15 +291,53 @@ public class CyphailParser {
 
     // ---------------- Consulta completa ----------------
 
-    // query : MATCH [WHERE] updatingClause* [RETURN] EOF
+    // query : MATCH pattern [WHERE expr] updatingClause* [RETURN] EOF
+    //       |                           updatingClause+ [RETURN] EOF      (sin MATCH: CREATE (a:Persona) ...)
     // El orden sigue la gramatica: readingClause* updatingClause* returnClause?
-    // EOF al final garantiza que no sobre texto sin leer
-    private static Parser<InputString, QueryNode, String> query() {
+    // EOF al final garantiza que no sobre texto sin leer. El WHERE pertenece al MATCH.
+
+    // [RETURN] EOF : lo que cierra toda consulta
+    private static Parser<InputString, Optional<ReturnClause>, String> returnAndEof() {
+        return Parsers.Left(Parsers.Opt(returnClause()), CyphailLexers.Eof());
+    }
+
+    private static Parser<InputString, QueryNode, String> queryWithMatch() {
         return Parsers.FlatMap(matchClause(), match ->
                 Parsers.FlatMap(Parsers.Opt(whereClause()), where ->
                         Parsers.FlatMap(Parsers.Many(updatingClause()), updates ->
-                                Parsers.Map(Parsers.Left(Parsers.Opt(returnClause()), CyphailLexers.Eof()),
+                                Parsers.Map(returnAndEof(),
                                         ret -> new QueryNode(Optional.of(match), where, updates, ret)))));
+    }
+
+    // Sin MATCH hace falta al menos una clausula de actualizacion: "RETURN 1" solo sigue siendo error
+    private static Parser<InputString, QueryNode, String> queryWithoutMatch() {
+        return Parsers.FlatMap(updatingClause(), first ->
+                Parsers.FlatMap(Parsers.Many(updatingClause()), more ->
+                        Parsers.Map(returnAndEof(),
+                                ret -> new QueryNode(Optional.empty(), Optional.empty(),
+                                        Stream.concat(Stream.of(first), more.stream()).toList(), ret))));
+    }
+
+    // Solo mira la siguiente palabra, no consume nada
+    private static boolean startsWith(Parser<InputString, TokenString, String> keyword, InputString source) {
+        return keyword.parse(source) instanceof Ok<InputString, TokenString, String>;
+    }
+
+    // Se decide por la primera palabra, asi un error dentro de un MATCH o de un CREATE
+    // se informa tal cual y no como "se esperaba otra cosa" de la otra alternativa.
+    private static Parser<InputString, QueryNode, String> query() {
+        Parser<InputString, TokenString, String> updatingKeyword = Parsers.Choice(
+                CyphailLexers.Create(), CyphailLexers.Set(), CyphailLexers.Delete(),
+                CyphailLexers.Detach(), CyphailLexers.Remove());
+        return source -> {
+            if (startsWith(CyphailLexers.Match(), source)) {
+                return queryWithMatch().parse(source);
+            }
+            if (startsWith(updatingKeyword, source)) {
+                return queryWithoutMatch().parse(source);
+            }
+            return new Fail<>("Expected MATCH, CREATE, SET, DELETE or REMOVE");
+        };
     }
 
     public static Result<InputString, QueryNode, String> parse(String input) {
