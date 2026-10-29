@@ -1,3 +1,9 @@
+// Cyphail - Graph Query Engine Prototype
+// EIF400-II-2026 - Escuela de Informatica, UNA
+// Grupo: G05
+// Autores: Luis Felipe Jimenez Fernandez, Jose David Chavarria Villalobos,
+// Jostin Jimenez Alfaro, Angel Rojas Ruano
+
 // Cyphail - demo del Sprint P2 (EIF400-II-2026, grupo G05).
 // Se ejecuta con:   .load "examples/demo_p2.cyphail"
 // Crea sus propios datos y despues corre los estatutos del SPEC con resultados visibles.
