@@ -271,7 +271,8 @@ public final class PrologCodegen {
             return switch (condition) {
                 case BinaryExpr(var left, var operator, var right) -> switch (operator) {
                     case "AND" -> "(" + goal(left) + ", " + goal(right) + ")";
-                    case "OR" -> "(" + goal(left) + " ; " + goal(right) + ")";
+                    // once/1: si las dos ramas se cumplen la fila no debe repetirse (los valores ya estan ligados)
+                    case "OR" -> "once((" + goal(left) + " ; " + goal(right) + "))";
                     default -> PredicateNames.comparator(operator) + "(" + term(left) + ", " + term(right) + ")";
                 };
                 case NotExpr(var operand) -> "\\+ " + goal(operand);

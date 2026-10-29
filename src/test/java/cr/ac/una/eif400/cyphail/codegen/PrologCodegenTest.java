@@ -259,7 +259,7 @@ class PrologCodegenTest {
                 new BinaryExpr(prop("a", "age"), "=", new LiteralExpr("30")));
         var query = read(List.of(new PathPattern(node("a"), List.of())), where, List.of(item(new VariableExpr("a"))));
 
-        assertTrue(codegen.generate(query).goal().contains("(\\+ cy_lt(__Aage, 18) ; cy_eq(__Aage, 30))"));
+        assertTrue(codegen.generate(query).goal().contains("once((\\+ cy_lt(__Aage, 18) ; cy_eq(__Aage, 30)))"));
     }
 
     // ---------- lo que todavia no se traduce ----------

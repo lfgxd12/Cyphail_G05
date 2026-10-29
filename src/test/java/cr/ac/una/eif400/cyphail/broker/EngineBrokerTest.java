@@ -64,6 +64,14 @@ class EngineBrokerTest {
     }
 
     @Test
+    void orReturnsEachRowOnceEvenWhenBothSidesHold() {
+        // Maria cumple las dos condiciones y aun asi aparece una sola vez
+        RowsTable table = run("MATCH (p:Person) WHERE (p.age > 25 AND p.age < 40) OR p.gender = 'female' RETURN p.name");
+
+        assertEquals(List.of(List.of("Juan Perez"), List.of("Maria Salas"), List.of("Ana Flores")), table.rows());
+    }
+
+    @Test
     void writesPersistBetweenQueriesAndCanBeUndone() {
         run("CREATE (:Planeta {nombre: 'Marte'})");
         assertEquals(List.of(List.of("Marte")), run("MATCH (p:Planeta) RETURN p.nombre").rows());
