@@ -64,6 +64,25 @@ class EngineBrokerTest {
     }
 
     @Test
+    void writesPersistBetweenQueriesAndCanBeUndone() {
+        run("CREATE (:Planeta {nombre: 'Marte'})");
+        assertEquals(List.of(List.of("Marte")), run("MATCH (p:Planeta) RETURN p.nombre").rows());
+
+        run("MATCH (p:Planeta) SET p.nombre = 'Venus'");
+        assertEquals(List.of(List.of("Venus")), run("MATCH (p:Planeta) RETURN p.nombre").rows());
+
+        run("MATCH (p:Planeta) DETACH DELETE p");
+        assertTrue(run("MATCH (p:Planeta) RETURN p.nombre").rows().isEmpty());
+    }
+
+    @Test
+    void deletingANodeThatHasRelationshipsIsAnError() {
+        EngineException e = assertThrows(EngineException.class,
+                () -> run("MATCH (p:Person {name: 'Jorge Soto'}) DELETE p"));
+        assertTrue(e.getMessage().contains("node_has_relationships"), e.getMessage());
+    }
+
+    @Test
     void anEngineErrorBecomesAnEngineException() {
         EngineException e = assertThrows(EngineException.class,
                 () -> broker.run("throw(error(cy_error(prueba(1)), _))"));
