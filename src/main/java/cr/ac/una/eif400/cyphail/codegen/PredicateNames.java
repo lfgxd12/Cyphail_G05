@@ -58,6 +58,36 @@ public final class PredicateNames {
         return "cy_erase_query";
     }
 
+    // Operaciones de escritura del engine (contrato C8). Todas reciben el nombre del grafo primero.
+    public static String createNode() {
+        return "cy_create_node";
+    }
+
+    public static String createEdge() {
+        return "cy_create_edge";
+    }
+
+    public static String setProp() {
+        return "cy_set_prop";
+    }
+
+    public static String removeProp() {
+        return "cy_remove_prop";
+    }
+
+    public static String delete() {
+        return "cy_delete";
+    }
+
+    public static String detachDelete() {
+        return "cy_detach_delete";
+    }
+
+    // El nombre del grafo como atomo Prolog (ya validado en el constructor)
+    public String graph() {
+        return graph;
+    }
+
     // El predicado del engine para un operador de comparacion de Cyphail
     public static String comparator(String operator) {
         return switch (operator) {

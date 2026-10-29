@@ -1,6 +1,7 @@
 package cr.ac.una.eif400.cyphail.codegen;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -31,7 +32,7 @@ public final class PrologVariables {
 
     private final Map<String, String> assigned = new LinkedHashMap<>();   // expresion original -> variable Prolog
     private final Set<String> used = new HashSet<>(Set.of(QUERY_ID));    // nombres ya ocupados (incluye los del sistema)
-    private int relationships = 0;
+    private final Map<String, Integer> counters = new HashMap<>();       // cuantas variables numeradas se han pedido por prefijo
 
     // a -> __A
     public String variable(String name) {
@@ -43,12 +44,26 @@ public final class PrologVariables {
         return assign(variable + "." + property, "__" + capitalize(variable) + property);
     }
 
+    // Despues de un SET o REMOVE el valor de esa propiedad cambio: la proxima vez que se lea
+    // (a.name) recibe una variable nueva (__Aname_2) y se vuelve a consultar.
+    public void refresh(String variable, String property) {
+        assigned.remove(variable + "." + property);
+    }
+
     // __E1, __E2, ... para las relaciones sin nombre. Salta los nombres que ya estan ocupados.
     public String nextRelationship() {
+        return next("__E");
+    }
+
+    // __N1, __N2, ... para los nodos que un CREATE crea sin variable
+    public String nextNode() {
+        return next("__N");
+    }
+
+    private String next(String prefix) {
         String name;
         do {
-            relationships++;
-            name = "__E" + relationships;
+            name = prefix + counters.merge(prefix, 1, Integer::sum);
         } while (used.contains(name));
         used.add(name);
         return name;

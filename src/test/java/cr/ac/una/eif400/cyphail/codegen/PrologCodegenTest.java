@@ -264,11 +264,114 @@ class PrologCodegenTest {
 
     // ---------- lo que todavia no se traduce ----------
 
+    // ---------- escritura: CREATE, SET, REMOVE, DELETE (ya las lee el parser) ----------
+
     @Test
-    void updatesAreNotSupportedYet() {
-        QueryNode query = new QueryNode(
+    void createWithoutMatchCreatesNodesThenTheRelationship() {
+        // Estatuto del SPEC: CREATE sin MATCH, con propiedades en nodos y relacion
+        CodegenResult result = fromText("CREATE (a:Persona {nombre: 'Marta'})"
+                + "-[r:TRABAJA_EN {rol: 'Dev'}]->(e:Empresa {nombre: 'UCR'}) RETURN a, r, e");
+
+        assertEquals("""
+                cy_create_query(__QueryId,
+                    (query_01(__A, __R, __E) :-
+                        cy_create_node(amigos, ['Persona'], [nombre-'Marta'], __A),
+                        cy_create_node(amigos, ['Empresa'], [nombre-'UCR'], __E),
+                        cy_create_edge(amigos, 'TRABAJA_EN', __A, __E, [rol-'Dev'], __R))),
+                cy_exec_query(__QueryId, ['a', 'r', 'e'], Rows),
+                cy_erase_query(__QueryId)""", result.goal());
+    }
+
+    @Test
+    void createRelationshipBetweenMatchedNodesDoesNotCreateNodes() {
+        // Estatuto del SPEC: MATCH (a), (b) CREATE (a)-[:ESCRIBIO]->(b)   (sin RETURN)
+        CodegenResult result = fromText("MATCH (a:Autor {nombre: 'Bill Gates'}), (b:Libro {titulo: 'Fake'})"
+                + " CREATE (a)-[:ESCRIBIO]->(b)");
+
+        assertFalse(result.goal().contains("cy_create_node"));
+        assertTrue(result.goal().contains("cy_create_edge(amigos, 'ESCRIBIO', __A, __B, [], __E1))"));
+        assertTrue(result.goal().contains("(query_01 :-"));     // sin RETURN: cabeza sin argumentos
+        assertEquals(List.of(), result.columns());
+    }
+
+    @Test
+    void setAssignsAPropertyAndTheNewValueCanBeReturned() {
+        CodegenResult result = fromText("MATCH (p:Product {code: \"PROD-99\"}) SET p.precio = 19.99 RETURN p");
+
+        assertTrue(result.goal().contains("cy_set_prop(amigos, __P, precio, 19.99)"));
+        assertTrue(result.goal().contains("query_01(__P)"));
+    }
+
+    @Test
+    void aPropertyReadInWhereIsReadAgainAfterSet() {
+        CodegenResult result = fromText("MATCH (p:Person) WHERE p.age > 40 SET p.age = 44 RETURN p.age");
+
+        // la lectura del WHERE (__Page) no sirve para el RETURN: el valor cambio con el SET
+        assertTrue(result.goal().contains("user_amigos_prop(__P, age, __Page_2)"));
+        assertTrue(result.goal().indexOf("cy_set_prop") < result.goal().indexOf("user_amigos_prop(__P, age, __Page_2)"));
+        assertTrue(result.goal().contains("query_01(__Page_2)"));
+    }
+
+    @Test
+    void setOnARelationshipVariable() {
+        CodegenResult result = fromText("MATCH (u:Student {id: \"4-666-000\"})-[r:attends]->(c:Course {nrc: \"50691\"})"
+                + " SET r.grade = 9.5 RETURN u.id, r.grade");
+
+        assertTrue(result.goal().contains("cy_set_prop(amigos, __R, grade, 9.5)"));
+        // el valor se lee DESPUES de asignarlo
+        assertTrue(result.goal().indexOf("cy_set_prop") < result.goal().indexOf("user_amigos_prop(__R, grade, __Rgrade)"));
+    }
+
+    @Test
+    void removeDropsAProperty() {
+        CodegenResult result = fromText("MATCH (p:Product {code: \"PROD-99\"}) REMOVE p.discount RETURN p.id");
+
+        assertTrue(result.goal().contains("cy_remove_prop(amigos, __P, discount)"));
+    }
+
+    @Test
+    void deleteAndDetachDelete() {
+        assertTrue(fromText("MATCH (a)-[r:KNOWS]->(b) WHERE r.since < 2000 DELETE r").goal()
+                .contains("cy_delete(amigos, __R)"));
+        assertTrue(fromText("MATCH (p:Person) DETACH DELETE p").goal().contains("cy_detach_delete(amigos, __P)"));
+    }
+
+    @Test
+    void createdNodeWithoutVariableGetsAnInternalOne() {
+        CodegenResult result = fromText("CREATE (:Persona {nombre: 'Ana'})-[:AMIGO]->(:Persona {nombre: 'Luis'})");
+
+        assertTrue(result.goal().contains("cy_create_node(amigos, ['Persona'], [nombre-'Ana'], __N1)"));
+        assertTrue(result.goal().contains("cy_create_edge(amigos, 'AMIGO', __N1, __N2, [], __E1)"));
+    }
+
+    @Test
+    void createWithDirectionInSwapsTheEndpoints() {
+        var a = new NodePattern(Optional.of("a"), List.of("Persona"), List.of());
+        var b = new NodePattern(Optional.of("b"), List.of("Persona"), List.of());
+        var create = new CreateClause(List.of(path(a, rel(null, "amigo", Direction.IN), b)));
+        var query = new QueryNode(Optional.empty(), Optional.empty(), List.of(create), Optional.empty());
+
+        assertTrue(codegen.generate(query).goal().contains("cy_create_edge(amigos, amigo, __B, __A, [], __E1)"));
+    }
+
+    @Test
+    void createRelationshipNeedsOneTypeAndADirection() {
+        var a = node("a");
+        var b = node("b");
+        var noDirection = new QueryNode(Optional.empty(), Optional.empty(), List.of(new CreateClause(List.of(
+                path(a, rel(null, "amigo", Direction.NONE), b)))), Optional.empty());
+        var noType = new QueryNode(Optional.empty(), Optional.empty(), List.of(new CreateClause(List.of(
+                path(a, new RelPattern(Optional.empty(), List.of(), List.of(), Direction.OUT), b)))), Optional.empty());
+
+        assertThrows(UnsupportedOperationException.class, () -> codegen.generate(noDirection));
+        assertThrows(UnsupportedOperationException.class, () -> codegen.generate(noType));
+    }
+
+    @Test
+    void deleteOnlyAcceptsVariables() {
+        var query = new QueryNode(
                 Optional.of(new MatchClause(List.of(new PathPattern(node("a"), List.of())))), Optional.empty(),
-                List.of(new DeleteClause(false, List.of(new VariableExpr("a")))), Optional.empty());
+                List.of(new DeleteClause(false, List.of(prop("a", "name")))), Optional.empty());
 
         assertThrows(UnsupportedOperationException.class, () -> codegen.generate(query));
     }
