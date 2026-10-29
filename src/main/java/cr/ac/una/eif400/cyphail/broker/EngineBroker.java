@@ -26,7 +26,7 @@ import java.util.stream.Collectors;
 
 // Arranca el engine (swipl con cyphail_engine.pl y el servidor MQI) como proceso hijo y le envia
 // los goals que genera el Codegen. Una sola instancia por sesion del REPL; close() la termina.
-public final class EngineBroker implements AutoCloseable {
+public final class EngineBroker implements GoalRunner {
 
     public static final int DEFAULT_TIMEOUT_SECONDS = 10;
     private static final int STARTUP_SECONDS = 20;
@@ -79,6 +79,7 @@ public final class EngineBroker implements AutoCloseable {
     }
 
     // Ejecuta el goal y devuelve el texto Rows del engine
+    @Override
     public synchronized String run(String goal) {
         if (closed) {
             throw new EngineException("The Prolog engine is not running");

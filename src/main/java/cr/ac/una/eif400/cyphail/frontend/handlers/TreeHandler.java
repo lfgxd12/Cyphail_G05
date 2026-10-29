@@ -6,7 +6,7 @@ import cr.ac.una.eif400.cyphail.output.TreePrinter;
 import cr.ac.una.eif400.cyphail.parser.CyphailParser;
 import cr.ac.una.eif400.cyphail.parser.core.Fail;
 import cr.ac.una.eif400.cyphail.parser.core.Ok;
-import cr.ac.una.eif400.cyphail.validation.VariableScopeChecker;
+import cr.ac.una.eif400.cyphail.validation.Analyzer;
 
 /*
  * Cyphail - Graph Query Engine Prototype
@@ -29,7 +29,7 @@ public class TreeHandler implements ReplCommand {
             case Fail(String reason) -> System.out.println("ERROR: Syntax error. " + reason);
             case Ok(QueryNode query, var rest) -> {
                 System.out.println(TreePrinter.print(query));
-                VariableScopeChecker.check(query).forEach(error -> System.out.println("ERROR: " + error));
+                Analyzer.check(query).forEach(error -> System.out.println("ERROR: " + error));
             }
         }
     }

@@ -1,90 +1,59 @@
 package cr.ac.una.eif400.cyphail.frontend.handlers;
 
-import com.google.gson.Gson;
+import cr.ac.una.eif400.cyphail.broker.EngineException;
 import cr.ac.una.eif400.cyphail.frontend.ReplCommand;
-import cr.ac.una.eif400.cyphail.model.GraphInfo;
+import cr.ac.una.eif400.cyphail.frontend.Session;
 import cr.ac.una.eif400.cyphail.output.TablePrinter;
 
-import java.io.FileReader;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.util.List;
+import java.util.Optional;
 
-/**
+/*
  * Cyphail - Graph Query Engine Prototype
  * EIF400-II-2026 - Escuela de Informatica, UNA
  * Grupo: G05
  * Autores: Luis Felipe Jimenez Fernandez, Jose David Chavarria Villalobos,
- *          Jostin Jimenez Alfaro, Angel Rojas Ruano
+ * Jostin Jimenez Alfaro, Angel Rojas Ruano
  */
+
+// .use            -> lista los grafos del engine y marca el que esta en uso
+// .use <grafo>    -> cambia el grafo en uso para las siguientes consultas
 public class UseHandler implements ReplCommand {
 
-    private static final Path GRAPHS_PATH =
-            Path.of("data", "graphs.json");
+    private final Session session;
+
+    public UseHandler(Session session) {
+        this.session = session;
+    }
 
     @Override
     public void execute(String args) {
-
-        if (!Files.exists(GRAPHS_PATH)) {
-            System.out.println("ERROR: File /data/graphs.json not found.");
-            return;
-        }
-
-        try (FileReader reader = new FileReader(GRAPHS_PATH.toFile())) {
-
-            Gson gson = new Gson();
-            GraphInfo[] graphs =
-                    gson.fromJson(reader, GraphInfo[].class);
-
-            if (graphs == null) {
-                System.out.println(
-                        "ERROR: /data/graphs.json is empty or invalid."
-                );
-                return;
-            }
-
+        try {
             if (args.isBlank()) {
-
-                String[] headers = {"Graph", "Description"};
-                String[][] data = new String[graphs.length][2];
-
-                for (int i = 0; i < graphs.length; i++) {
-                    data[i][0] = graphs[i].name();
-                    data[i][1] = graphs[i].description();
-                }
-
-                TablePrinter.printTable(headers, data);
-                System.out.println(
-                        "OK. Query available after 5 ms."
-                );
-
+                list();
             } else {
-
-                boolean exists = false;
-
-                for (GraphInfo graph : graphs) {
-                    if (graph.name().equalsIgnoreCase(args.trim())) {
-                        exists = true;
-                        break;
-                    }
-                }
-
-                if (exists) {
-                    System.out.printf(
-                            "OK. \"%s\" graph available after 1 ms.%n",
-                            args.trim()
-                    );
-                } else {
-                    System.out.printf(
-                            "ERROR: Graph \"%s\" not found.%n",
-                            args.trim()
-                    );
-                }
+                select(args.strip());
             }
+        } catch (EngineException e) {
+            System.out.println("ERROR: " + e.getMessage());
+        }
+    }
 
-        } catch (Exception e) {
-            System.out.println(
-                    "ERROR reading graphs JSON: " + e.getMessage()
-            );
+    private void list() {
+        List<String> graphs = session.graphs();
+        String[][] data = graphs.stream()
+                .map(name -> new String[]{name, name.equals(session.graph()) ? "*" : ""})
+                .toArray(String[][]::new);
+        TablePrinter.printTable(new String[]{"Graph", "In use"}, data);
+        System.out.println("OK. " + graphs.size() + " graph(s) available.");
+    }
+
+    private void select(String name) {
+        Optional<String> graph = session.use(name);
+        if (graph.isPresent()) {
+            System.out.printf("OK. \"%s\" graph available.%n", graph.get());
+        } else {
+            System.out.printf("ERROR: Graph \"%s\" not found.%n", name);
         }
     }
 }

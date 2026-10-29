@@ -5,6 +5,7 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.ConnectException;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
@@ -26,6 +27,9 @@ public final class MqiClient implements Closeable {
     // Margen sobre el timeout de la consulta para que el engine alcance a responder time_limit_exceeded
     private static final int SOCKET_MARGIN_MS = 5_000;
 
+    private static final int CONNECT_ATTEMPTS = 50;
+    private static final int CONNECT_PAUSE_MS = 100;
+
     private final Socket socket;
     private final InputStream in;
     private final OutputStream out;
@@ -38,7 +42,7 @@ public final class MqiClient implements Closeable {
 
     // Abre la conexion y se autentica con la clave que el engine imprimio al arrancar
     public static MqiClient connect(int port, String password) throws IOException {
-        MqiClient client = new MqiClient(new Socket(InetAddress.getLoopbackAddress(), port));
+        MqiClient client = new MqiClient(openSocket(port));
         try {
             client.socket.setSoTimeout(10_000);
             client.send(password);
@@ -48,6 +52,26 @@ public final class MqiClient implements Closeable {
             client.close();
             throw e;
         }
+    }
+
+    // El engine imprime el puerto un instante antes de empezar a escuchar: si la conexion es
+    // rechazada se reintenta unos segundos antes de rendirse
+    private static Socket openSocket(int port) throws IOException {
+        IOException last = null;
+        for (int attempt = 0; attempt < CONNECT_ATTEMPTS; attempt++) {
+            try {
+                return new Socket(InetAddress.getLoopbackAddress(), port);
+            } catch (ConnectException e) {
+                last = e;
+                try {
+                    Thread.sleep(CONNECT_PAUSE_MS);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw e;
+                }
+            }
+        }
+        throw last;
     }
 
     // Ejecuta el goal (una solucion) y devuelve el resultado ya interpretado
