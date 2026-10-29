@@ -164,7 +164,7 @@ public final class EngineBroker implements GoalRunner {
                 String password = out.readLine();
                 values.complete(new String[]{port, password});
                 while (out.readLine() != null) {
-                    // se sigue leyendo para que el engine nunca se bloquee escribiendo en stdout
+                    // se sigue leyendo para que el engine nunca se bloquee escribiendo
                 }
             } catch (IOException e) {
                 values.completeExceptionally(e);
