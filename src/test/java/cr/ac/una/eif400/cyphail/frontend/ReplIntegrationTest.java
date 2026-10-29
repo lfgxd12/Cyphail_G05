@@ -11,9 +11,13 @@ package cr.ac.una.eif400.cyphail.frontend;
 import cr.ac.una.eif400.cyphail.broker.EngineException;
 import cr.ac.una.eif400.cyphail.broker.GoalRunner;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.PrintStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -21,6 +25,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ReplIntegrationTest {
+
+    @TempDir
+    Path dir;
 
     // Engine falso: guarda los goals que recibe y contesta con el Rows que se le indique
     private static final class FakeEngine implements GoalRunner {
@@ -162,6 +169,49 @@ class ReplIntegrationTest {
         String output = captureOutput(() -> new Repl(() -> engine).runCommand(".use nada"));
 
         assertTrue(output.contains("ERROR: Graph \"nada\" not found."), output);
+    }
+
+    @Test
+    void loadRunsEveryStatementOfTheFileInOrder() throws IOException {
+        Path script = Files.writeString(dir.resolve("demo.cyphail"),
+                "// demo\nCREATE (:Planeta {nombre: 'Marte'});\nMATCH (p:Planeta)\nRETURN p.nombre;\n");
+        FakeEngine engine = new FakeEngine();
+        engine.rows = "p.nombre\n\"Marte\"";
+
+        String output = captureOutput(() -> new Repl(() -> engine).runCommand(".load \"" + script + "\""));
+
+        assertEquals(2, engine.goals.size());
+        assertTrue(engine.goals.get(0).contains("cy_create_node"));
+        assertTrue(output.contains("[1/2]") && output.contains("[2/2]"), output);
+        assertTrue(output.contains("OK. 2 statement(s) executed."), output);
+    }
+
+    @Test
+    void loadStopsAtTheFirstStatementThatFails() throws IOException {
+        Path script = Files.writeString(dir.resolve("roto.cyphail"),
+                "MATCH (a) RETURN a;\nMATCH INVALID;\nMATCH (b) RETURN b;\n");
+        FakeEngine engine = new FakeEngine();
+
+        String output = captureOutput(() -> new Repl(() -> engine).runCommand(".load " + script));
+
+        assertEquals(1, engine.goals.size());
+        assertTrue(output.contains("Syntax error"), output);
+        assertTrue(output.contains(".load stopped at statement 2 of 3."), output);
+    }
+
+    @Test
+    void loadReportsAMissingFile() {
+        String output = captureOutput(() ->
+                new Repl(() -> new FakeEngine()).runCommand(".load \"" + dir.resolve("nada.cyphail") + "\""));
+
+        assertTrue(output.contains("ERROR: File not found:"), output);
+    }
+
+    @Test
+    void loadWithoutAPathShowsTheUsage() {
+        String output = captureOutput(() -> new Repl(() -> new FakeEngine()).runCommand(".load"));
+
+        assertTrue(output.contains("Usage: .load"), output);
     }
 
     private String captureOutput(Runnable action) {

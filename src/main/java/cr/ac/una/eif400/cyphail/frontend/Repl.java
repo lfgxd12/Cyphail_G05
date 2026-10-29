@@ -15,7 +15,14 @@ import cr.ac.una.eif400.cyphail.parser.core.Ok;
 import cr.ac.una.eif400.cyphail.validation.Analyzer;
 import cr.ac.una.eif400.cyphail.validation.SemanticException;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
+import java.nio.file.NoSuchFileException;
+import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
 import java.util.function.Supplier;
@@ -34,8 +41,8 @@ public class Repl {
         Visit www.whatiscyphail.com for more information
         Type ".help" for more information and commands
         Type ".exit" to quit
-        Queries may span several lines: they run when complete (with RETURN),
-        or finish them with ";" or an empty line.
+        Statements may span several lines: finish them with ";" (or an empty line).
+        Type ".load <file>" to run a .cyphail script.
         """;
 
     private final Map<String, ReplCommand> commands = new HashMap<>();
@@ -52,45 +59,32 @@ public class Repl {
         commands.put(".about", new AboutHandler());
         commands.put(".use", new UseHandler(session));
         commands.put(".tree", new TreeHandler());
+        commands.put(".load", this::load);
     }
 
+    // Bucle de entrada/salida: lee una linea, ReplStep decide que ejecutar y aqui se ejecuta
     public void start() {
         System.out.println(BANNER);
         Scanner scanner = new Scanner(System.in);
-        StringBuilder pending = new StringBuilder(); // consulta de varias lineas en construccion
+        ReplStep.State state = ReplStep.State.EMPTY;
 
         while (true) {
-            System.out.print(pending.isEmpty() ? ">>> " : "... ");
+            System.out.print(state.pending().isEmpty() ? ">>> " : "... ");
             if (!scanner.hasNextLine()) break;
 
-            String line = scanner.nextLine().strip();
-
-            // Comandos de una sola linea (.help, .about, .use, .exit): se ejecutan de inmediato
-            if (pending.isEmpty() && line.startsWith(".") && !MultilineInput.isTreeCommand(line)) {
-                if (!runCommand(line)) break;
-                continue;
-            }
-
-            // Linea vacia: ejecuta lo pendiente, si hay algo
-            if (line.isEmpty()) {
-                if (!pending.isEmpty()) {
-                    runStatement(pending.toString());
-                    pending.setLength(0);
-                }
-                continue;
-            }
-
-            // Consulta o .tree: se acumula hasta que este completa
-            if (!pending.isEmpty()) {
-                pending.append('\n');
-            }
-            pending.append(line);
-            if (MultilineInput.isComplete(pending.toString())) {
-                runStatement(pending.toString());
-                pending.setLength(0);
-            }
+            ReplStep.Result result = ReplStep.step(state, scanner.nextLine());
+            result.requests().forEach(this::run);
+            state = result.next();
+            if (result.exit()) break;
         }
         session.close();
+    }
+
+    private void run(ReplStep.Request request) {
+        switch (request) {
+            case ReplStep.Command command -> runCommand(command.line());
+            case ReplStep.Statement statement -> runStatement(statement.text());
+        }
     }
 
     // Ejecuta un comando de una linea. Devuelve false si hay que salir del REPL (.exit)
@@ -113,22 +107,23 @@ public class Repl {
         return true;
     }
 
-    void runStatement(String text) {
+    // Devuelve true si la sentencia se ejecuto sin error
+    boolean runStatement(String text) {
         String statement = MultilineInput.clean(text);
 
         if (MultilineInput.isTreeCommand(statement)) {
             commands.get(".tree").execute(MultilineInput.withoutTreeCommand(statement));
-            return;
+            return true;
         }
 
-        switch (CyphailParser.parse(statement)) {
-            case Fail(String reason) -> System.out.println("ERROR: Syntax error. " + reason);
+        return switch (CyphailParser.parse(statement)) {
+            case Fail(String reason) -> error("Syntax error. " + reason);
             case Ok(QueryNode query, var rest) -> execute(query);
-        }
+        };
     }
 
     // Analyzer -> Codegen -> engine -> tabla. Cada etapa que falla se informa con su propio mensaje.
-    private void execute(QueryNode query) {
+    private boolean execute(QueryNode query) {
         try {
             Analyzer.validate(query);
             String goal = new PrologCodegen(new PredicateNames(session.graph())).generate(query).goal();
@@ -136,15 +131,61 @@ public class Repl {
             RowsTable table = RowsTable.parse(session.runner().run(goal));
             long millis = (System.nanoTime() - start) / 1_000_000;
             print(table, millis);
-        } catch (SemanticException e) {
-            System.out.println("ERROR: " + e.getMessage());
+            return true;
+        } catch (SemanticException | EngineException e) {
+            return error(e.getMessage());
         } catch (UnsupportedOperationException e) {
-            System.out.println("ERROR: Not supported yet: " + e.getMessage());
-        } catch (EngineException e) {
-            System.out.println("ERROR: " + e.getMessage());
+            return error("Not supported yet: " + e.getMessage());
         } catch (IllegalArgumentException e) {
-            System.out.println("ERROR: The engine answered with an unexpected format. " + e.getMessage());
+            return error("The engine answered with an unexpected format. " + e.getMessage());
         }
+    }
+
+    private static boolean error(String message) {
+        System.out.println("ERROR: " + message);
+        return false;
+    }
+
+    // .load "ruta.cyphail": ejecuta en orden cada sentencia del archivo y se detiene en la primera que falla
+    private void load(String args) {
+        String raw = args.strip();
+        if (raw.isEmpty()) {
+            System.out.println("Usage: .load \"path/to/script.cyphail\"");
+            return;
+        }
+        String text;
+        try {
+            text = Files.readString(Path.of(unquote(raw)), StandardCharsets.UTF_8);
+        } catch (NoSuchFileException e) {
+            error("File not found: " + unquote(raw));
+            return;
+        } catch (IOException | InvalidPathException e) {
+            error("Could not read " + unquote(raw) + ": " + e.getMessage());
+            return;
+        }
+
+        List<String> statements = Statements.all(text);
+        for (int i = 0; i < statements.size(); i++) {
+            System.out.println("[" + (i + 1) + "/" + statements.size() + "] " + summary(statements.get(i)));
+            if (!runStatement(statements.get(i))) {
+                error(".load stopped at statement " + (i + 1) + " of " + statements.size() + ".");
+                return;
+            }
+        }
+        System.out.println("OK. " + statements.size() + " statement(s) executed.");
+    }
+
+    private static String unquote(String text) {
+        boolean quoted = text.length() >= 2
+                && (text.startsWith("\"") && text.endsWith("\"") || text.startsWith("'") && text.endsWith("'"));
+        return quoted ? text.substring(1, text.length() - 1) : text;
+    }
+
+    // Primera linea de la sentencia que no sea un comentario, recortada
+    private static String summary(String statement) {
+        String line = statement.lines().map(String::strip)
+                .filter(l -> !l.isEmpty() && !l.startsWith("//")).findFirst().orElse("");
+        return line.length() > 70 ? line.substring(0, 70) + "..." : line;
     }
 
     private void print(RowsTable table, long millis) {
