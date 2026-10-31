@@ -26,7 +26,8 @@ public class CyphailParser {
     // Palabras reservadas: el lexer Id() las reconoce como identificadores cualquiera, asi que sin esto
     // "WHERE NOT" se leeria como la variable "NOT" y "... AND RETURN" como la variable "RETURN".
     private static final Set<String> RESERVED = Set.of(
-            "MATCH", "WHERE", "RETURN", "AS", "CREATE", "DELETE", "DETACH", "SET", "REMOVE", "AND", "OR", "NOT");
+            "MATCH", "WHERE", "RETURN", "AS", "CREATE", "DELETE", "DETACH", "SET", "REMOVE", "AND", "OR", "NOT",
+            "TRUE", "FALSE");
 
     // Una variable en una expresion: un identificador que no es palabra reservada.
     // El parser interno no consume nada: solo decide si deja pasar al nombre que ya se leyo.
@@ -50,9 +51,21 @@ public class CyphailParser {
 
     // atom : m.title | m | 300 | "texto"
     // propertyLookup va primero: si "m" se leyera como variable, ".title" quedaria suelto
+    // true / false (sin importar mayusculas). Se guardan en minuscula, como los escribe Prolog: LiteralExpr("true").
+    // Son palabras reservadas, asi que variableName() nunca los lee como variable.
+    private static Parser<InputString, Expression, String> booleanLiteral() {
+        return Parsers.FlatMap(ID, name -> source -> {
+            if (name.equalsIgnoreCase("true") || name.equalsIgnoreCase("false")) {
+                return new Ok<>(new LiteralExpr(name.toLowerCase(Locale.ROOT)), source);
+            }
+            return new Fail<>("Expected true or false");
+        });
+    }
+
     private static Parser<InputString, Expression, String> atom() {
         return Parsers.Choice(
                 Parsers.Map(propertyLookup(), lookup -> lookup),
+                booleanLiteral(),
                 Parsers.Map(variableName(), VariableExpr::new),
                 Parsers.Map(CyphailLexers.Number(), token -> new LiteralExpr(token.value())),
                 Parsers.Map(CyphailLexers.String(), token -> new LiteralExpr(token.value())));
