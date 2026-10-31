@@ -86,16 +86,22 @@
 10. **Documentación y demo:** README de P2 y el script `examples/demo_p2.cyphail`.
 11. **Revisión de código y apoyo en la integración** del trabajo de Jose, Jostin y Angel.
 
-### Jose David Chavarría Villalobos
-* **Modelo utilizado:** [COMPLETAR: herramienta de IA, o "no se usó IA"]
-* **Propósito:** [COMPLETAR]
+### Jose David Chavarria Villalobos
+* **Modelo utilizado:** Claude (Anthropic) Sonnet 5.5
+* **Propósito:** Asistente para escribir el código y las pruebas del parser de P2 (CREATE sin MATCH, SET, AND/OR/NOT, literales true/false) y para explicarme el código. Yo verifiqué que todo funcionara: corrí las pruebas y revisé el resultado.
 
 ### Registro
-1. **Lexer:** nuevos tokens para P2.
-2. **Parser de relaciones:** patrones `(a)-[r:TIPO {p: v}]->(b)` con las tres direcciones.
-3. **CREATE sin MATCH** y pruebas (`ConditionParserTest`, `RelationshipParserTest`, `SpecStatementsParserTest`).
-4. [COMPLETAR: en qué puntos de lo anterior se usó IA y cómo]
-5. Nota: Luis corrigió en `CyphailLexers` un problema con palabras clave dentro de comentarios (ver Luis, punto 8a); Jose fue informado.
+1. **Lexer** (`CyphailLexers.java`): tokens nuevos para P2 (relaciones, `SET`, `AND`, `OR`, `NOT` y decimales). Se desarrolló a la par con la IA. Pruebas en `CyphailLexersTest`.
+2. **Parser de relaciones** (`CyphailParser.java`): patrones `(a)-[r:TIPO {p: v}]->(b)` con las tres direcciones (OUT, IN y NONE) y propiedades inline. Se desarrolló a la par con la IA. Pruebas en `RelationshipParserTest`.
+3. **MATCH opcional** (`CyphailParser.java`, `query()`): una consulta puede empezar con `CREATE`, `SET`, `DELETE` o `REMOVE` sin `MATCH`. Se decide por la primera palabra, y sin `MATCH` se exige al menos una cláusula de actualización, de modo que `RETURN 1` y la entrada vacía siguen siendo error. Pruebas de las 8 sentencias del SPEC en `SpecStatementsParserTest`.
+4. **SET** (`setItem`, `setClause`): `SET p.precio = 19.99, p.nombre = 'x'` dentro de las cláusulas de actualización, en el orden en que se escriben.
+5. **Condiciones** (`expression`, `leftAssociative`, `lazyExpression`): `AND`, `OR`, `NOT` y paréntesis con precedencia NOT > AND > OR, asociativos a la izquierda (se arman con `reduce`). `AND` y `OR` se guardan como `"AND"` y `"OR"` en mayúscula, que es el contrato con el Codegen. Pruebas en `ConditionParserTest`.
+6. **Palabras reservadas** (`RESERVED`, `variableName`): una palabra reservada ya no se lee como variable.
+7. **Literales `true` y `false`** (`booleanLiteral`): se guardan como `LiteralExpr("true")` y `LiteralExpr("false")`, sin importar mayúsculas. Se comprobaron los 13 casos unitarios del profesor y se agregó `ProfessorP2CasesParserTest`.
+8. **Errores encontrados al probar:** (a) `WHERE NOT` y `... AND RETURN` se aceptaban, porque `Id()` reconoce cualquier palabra como identificador; (b) `true` se leía como una variable y el Analyzer marcaba `Undefined variable 'true'` en los casos 8 y 10 del profesor.
+9. **Verificación:** corrí `mvn test` con todas las pruebas del proyecto en verde antes de subir los cambios.
+10. **Explicación y revisión:** la IA me explicó el AST, los combinadores y `CyphailParser`, y se usó para revisar la rama de Luis y para configurar Java 26, Maven y git.
+11. **Nota:** Luis corrigió en `CyphailLexers` un problema con palabras clave dentro de comentarios (ver Luis, punto 8a). Jose fue informado.
 
 ### Jostin Jiménez Alfaro
 * **Modelo utilizado:** [COMPLETAR: herramienta de IA, o "no se usó IA"]
