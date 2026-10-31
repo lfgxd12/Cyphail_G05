@@ -17,14 +17,14 @@ public class HelpHandler implements ReplCommand {
             Available REPL Commands:
               .help             Show this help message
               .about            Show project authors and course details
-              .use [graph]      List available graphs or select a graph
+              .use [graph]      List the engine graphs or select the graph in use
               .tree <query>     Show the AST of a query (SPEC tree format)
+              .load "file"      Run every statement of a .cyphail script, in order
               .exit             Exit the REPL
 
             Engine Queries:
               Type Cyphail statements directly (e.g., MATCH (p:Persona) RETURN p.nombre, p.edad)
-              Queries may span several lines: they run when complete (with RETURN),
-              or finish them with ";" or an empty line.
+              Statements may span several lines: they end with ";" (or an empty line).
             """);
     }
 }

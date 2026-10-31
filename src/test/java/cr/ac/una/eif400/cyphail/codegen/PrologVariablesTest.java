@@ -81,6 +81,23 @@ class PrologVariablesTest {
     }
 
     @Test
+    void nextNodeNumbersTheNodesCreatedWithoutAVariable() {
+        var vars = new PrologVariables();
+        assertEquals("__N1", vars.nextNode());
+        assertEquals("__N2", vars.nextNode());
+        assertEquals("__E1", vars.nextRelationship());
+    }
+
+    @Test
+    void refreshMakesThePropertyGetAFreshVariable() {
+        var vars = new PrologVariables();
+        assertEquals("__Aage", vars.property("a", "age"));
+        vars.refresh("a", "age");
+        assertEquals("__Aage_2", vars.property("a", "age"));
+        assertEquals("__Aage_2", vars.property("a", "age"));
+    }
+
+    @Test
     void tableKeepsTheOrderAndCannotBeModified() {
         var vars = new PrologVariables();
         vars.variable("b");

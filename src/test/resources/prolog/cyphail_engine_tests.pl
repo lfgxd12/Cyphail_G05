@@ -173,3 +173,88 @@ cy_esperar_dos_lineas(Archivo, Intentos, Lineas) :-
     ).
 
 :- end_tests(cy_no_escribe_stdout).
+
+
+% Las escrituras se prueban en un grafo propio (prueba) para no tocar el de ejemplo (amigos)
+:- begin_tests(cy_escritura).
+
+test(create_node_con_etiquetas_y_propiedades) :-
+    cy_create_node(prueba, ['Libro', 'Obra'], [titulo-'Dune', paginas-412], Id),
+    user_prueba_node(Id),
+    user_prueba_label(Id, 'Libro'),
+    user_prueba_label(Id, 'Obra'),
+    user_prueba_prop(Id, titulo, 'Dune'),
+    user_prueba_prop(Id, paginas, 412).
+
+test(los_ids_nuevos_nunca_se_repiten) :-
+    cy_create_node(prueba, [], [], A),
+    cy_create_node(prueba, [], [], B),
+    cy_create_edge(prueba, rel, A, B, [], E),
+    sort([A, B, E], Ids),
+    length(Ids, 3).
+
+test(create_node_no_pisa_un_id_que_ya_existe) :-
+    retractall(cy_counter(id, _)),
+    assertz(user_prueba_node(id101)),
+    cy_create_node(prueba, [], [], Id),
+    Id \== id101.
+
+test(create_edge_con_tipo_extremos_y_propiedades) :-
+    cy_create_node(prueba, [], [], A),
+    cy_create_node(prueba, [], [], B),
+    cy_create_edge(prueba, 'TRABAJA_EN', A, B, [rol-'Dev'], E),
+    user_prueba_edge(E, 'TRABAJA_EN', A, B),
+    user_prueba_prop(E, rol, 'Dev').
+
+test(set_prop_crea_y_luego_reemplaza) :-
+    cy_create_node(prueba, [], [], Id),
+    cy_set_prop(prueba, Id, precio, 10),
+    cy_set_prop(prueba, Id, precio, 19.99),
+    findall(V, user_prueba_prop(Id, precio, V), Valores),
+    Valores == [19.99].
+
+test(remove_prop_quita_la_propiedad_y_tolera_la_ausente) :-
+    cy_create_node(prueba, [], [color-rojo], Id),
+    cy_remove_prop(prueba, Id, color),
+    \+ user_prueba_prop(Id, color, _),
+    cy_remove_prop(prueba, Id, color).
+
+test(delete_borra_un_nodo_sin_relaciones) :-
+    cy_create_node(prueba, ['X'], [a-1], Id),
+    cy_delete(prueba, Id),
+    \+ user_prueba_node(Id),
+    \+ user_prueba_label(Id, _),
+    \+ user_prueba_prop(Id, _, _).
+
+test(delete_de_un_nodo_con_relaciones_es_un_error,
+     [throws(error(cy_error(node_has_relationships(_)), _))]) :-
+    cy_create_node(prueba, [], [], A),
+    cy_create_node(prueba, [], [], B),
+    cy_create_edge(prueba, rel, A, B, [], _),
+    cy_delete(prueba, B).
+
+test(delete_borra_una_relacion_con_sus_propiedades) :-
+    cy_create_node(prueba, [], [], A),
+    cy_create_node(prueba, [], [], B),
+    cy_create_edge(prueba, rel, A, B, [k-v], E),
+    cy_delete(prueba, E),
+    \+ user_prueba_edge(E, _, _, _),
+    \+ user_prueba_prop(E, _, _),
+    user_prueba_node(A),
+    user_prueba_node(B).
+
+test(detach_delete_borra_el_nodo_y_sus_relaciones) :-
+    cy_create_node(prueba, [], [], A),
+    cy_create_node(prueba, [], [], B),
+    cy_create_node(prueba, [], [], C),
+    cy_create_edge(prueba, rel, A, B, [], E1),
+    cy_create_edge(prueba, rel, C, B, [p-1], E2),
+    cy_detach_delete(prueba, B),
+    \+ user_prueba_node(B),
+    \+ user_prueba_edge(E1, _, _, _),
+    \+ user_prueba_edge(E2, _, _, _),
+    \+ user_prueba_prop(E2, _, _),
+    user_prueba_node(A),
+    user_prueba_node(C).
+
+:- end_tests(cy_escritura).

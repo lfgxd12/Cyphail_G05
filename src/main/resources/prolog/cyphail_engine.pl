@@ -142,3 +142,84 @@ cy_exec_query(Id, Columnas, Rows) :-
 
 cy_erase_query(Id) :-
     retractall(cy_stored(Id, _)).
+
+
+%%%%%%%%%% Operaciones de escritura (contrato C8) %%%%%%%%%%
+% Las llama el Codegen dentro del cuerpo de la consulta (una vez por cada solucion del MATCH).
+% Todas reciben el nombre del grafo G. Los errores se lanzan como error(cy_error(Detalle), _)
+% porque el MQI solo devuelve el detalle de los errores envueltos en error/2.
+
+:- dynamic cy_counter/2.
+
+% user_G_Sufijo(Args...) como termino: cy_pred(amigos, prop, 3, [Id, K, V], Goal)
+cy_pred(G, Sufijo, Aridad, Args, Goal) :-
+    atomic_list_concat([user_, G, '_', Sufijo], Nombre),
+    length(Args, Aridad),
+    Goal =.. [Nombre | Args].
+
+% Id nuevo (id101, e101, ...) que ningun nodo ni relacion usa; los ids nunca se repiten
+cy_next_id(G, Prefijo, Id) :-
+    ( retract(cy_counter(Prefijo, N0)) -> true ; N0 = 100 ),
+    N is N0 + 1,
+    assertz(cy_counter(Prefijo, N)),
+    atom_concat(Prefijo, N, Candidato),
+    (   cy_id_used(G, Candidato)
+    ->  cy_next_id(G, Prefijo, Id)
+    ;   Id = Candidato
+    ).
+
+cy_id_used(G, Id) :-
+    (   cy_pred(G, node, 1, [Id], Nodo), clause(Nodo, true)
+    ;   cy_pred(G, edge, 4, [Id, _, _, _], Rel), clause(Rel, true)
+    ;   cy_pred(G, prop, 3, [Id, _, _], Prop), clause(Prop, true)
+    ),
+    !.
+
+% cy_create_node(+G, +Labels, +Props, -Id)   Props es una lista Clave-Valor
+cy_create_node(G, Labels, Props, Id) :-
+    cy_next_id(G, id, Id),
+    cy_pred(G, node, 1, [Id], Nodo), assertz(Nodo),
+    forall(member(L, Labels), ( cy_pred(G, label, 2, [Id, L], Et), assertz(Et) )),
+    cy_assert_props(G, Id, Props).
+
+% cy_create_edge(+G, +Type, +From, +To, +Props, -Id)
+cy_create_edge(G, Type, From, To, Props, Id) :-
+    cy_next_id(G, e, Id),
+    cy_pred(G, edge, 4, [Id, Type, From, To], Rel), assertz(Rel),
+    cy_assert_props(G, Id, Props).
+
+cy_assert_props(G, Id, Props) :-
+    forall(member(K-V, Props), ( cy_pred(G, prop, 3, [Id, K, V], P), assertz(P) )).
+
+% cy_set_prop(+G, +Id, +K, +V)   crea la propiedad o reemplaza su valor
+cy_set_prop(G, Id, K, V) :-
+    cy_pred(G, prop, 3, [Id, K, _], Vieja), retractall(Vieja),
+    cy_pred(G, prop, 3, [Id, K, V], Nueva), assertz(Nueva).
+
+% cy_remove_prop(+G, +Id, +K)   si la propiedad no existe no hace nada
+cy_remove_prop(G, Id, K) :-
+    cy_pred(G, prop, 3, [Id, K, _], P), retractall(P).
+
+% cy_delete(+G, +Id)   borra un nodo (que no tenga relaciones) o una relacion
+cy_delete(G, Id) :-
+    cy_pred(G, edge, 4, [_, _, Id, _], Sale),
+    cy_pred(G, edge, 4, [_, _, _, Id], Entra),
+    (   ( clause(Sale, true) ; clause(Entra, true) )
+    ->  throw(error(cy_error(node_has_relationships(Id)), _))
+    ;   cy_drop(G, Id)
+    ).
+
+% cy_detach_delete(+G, +Id)   borra el nodo y todas las relaciones que lo tocan
+cy_detach_delete(G, Id) :-
+    cy_pred(G, edge, 4, [E, _, Id, _], Sale),
+    cy_pred(G, edge, 4, [E, _, _, Id], Entra),
+    findall(E, ( clause(Sale, true) ; clause(Entra, true) ), Relaciones),
+    forall(member(R, Relaciones), cy_drop(G, R)),
+    cy_drop(G, Id).
+
+% Quita todo lo que se sabe de un id (nodo o relacion)
+cy_drop(G, Id) :-
+    cy_pred(G, prop, 3, [Id, _, _], P), retractall(P),
+    cy_pred(G, label, 2, [Id, _], L), retractall(L),
+    cy_pred(G, node, 1, [Id], N), retractall(N),
+    cy_pred(G, edge, 4, [Id, _, _, _], R), retractall(R).

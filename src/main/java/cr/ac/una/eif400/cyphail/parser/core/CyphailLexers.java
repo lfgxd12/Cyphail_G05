@@ -12,7 +12,9 @@ import java.util.regex.Pattern;
 
 public class CyphailLexers {
 
-    private static final String SKIP = "(?:\\s|//[^\\n\\r]*|/\\*(?s:.*?)\\*/)*";
+    // Cuantificadores posesivos (*+): sin ellos el motor puede "devolver" parte de un comentario y leer
+    // como token una palabra que esta dentro de el (// ... CREATE sin MATCH ...)
+    private static final String SKIP = "(?:\\s|//[^\\n\\r]*+|/\\*(?s:.*?)\\*/)*+";
     private static final Pattern ONLY_SKIPPABLE = Pattern.compile(SKIP);
 
     private static Lexer token(String regex, TToken tokenType, String failMessage) {

@@ -61,3 +61,57 @@
 4. **Comando `.use`** (`UseHandler.java`): se solicitó ayuda para eliminar la lista de grafos hardcodeada y cargar la información desde `data/graphs.json` mediante Gson.
 5. **Pruebas** (`JsonFakeBrokerTest`, `ReplIntegrationTest`): se solicitó ayuda para crear pruebas del broker y de la integración del REPL, incluyendo consultas con `RETURN`, confirmaciones de `CREATE`, errores sintácticos y variables no declaradas.
 6. **Revisión y depuración**: se utilizó el asistente para revisar errores de compilación, configuración de Java 26 y verificar la integración con la estructura existente del repositorio.
+
+
+
+
+
+
+## Sprint P2
+
+### Luis Felipe Jiménez Fernández
+* **Modelo utilizado:** Claude (Anthropic) Sonnet 5.5
+* **Propósito:** Asistente de diseño, revisión, depuración y apoyo en la escritura de código. Todas las decisiones de diseño, la integración, las pruebas y la supervisión del resultado fueron mías.
+
+### Registro
+1. **Diseño de la tubería:** se conversó el flujo REPL -> Parser -> Analyzer -> Codegen -> Broker (MQI) -> engine SWI-Prolog -> tabla, el esquema del grafo en Prolog según el SPEC (user_G_node/label/edge/prop), el formato del texto "Rows" y los contratos entre los cuatro miembros.
+2. **AST nuevo** (`ast/*.java`): relaciones, caminos, dirección, SET, REMOVE, DELETE y MATCH opcional.
+3. **Codegen** (`codegen/*`: PrologCodegen, PrologVariables, PrologTerms, PredicateNames, CodegenResult): traducción del AST a un goal Prolog, tanto de lectura (MATCH/WHERE/RETURN) como de escritura (CREATE con y sin MATCH, SET, REMOVE, DELETE, DETACH DELETE). Se comprobó ejecutando los goals generados contra SWI-Prolog real.
+4. **Analyzer y SymbolTable** (`validation/*`): alcance de variables y las reglas nuevas del SPEC (variable de relación repetida, mismo nombre como nodo y relación, prefijo `__` reservado), más el rechazo de DELETE sobre algo que no es una variable.
+5. **Broker** (`broker/MqiClient`, `EngineBroker`, `SwiplLocator`, `RowsTable`, `GoalRunner`, `EngineException`): cliente del protocolo MQI sobre TCP (marcos de bytes en UTF-8, autenticación, timeout), arranque y cierre del proceso swipl, búsqueda del ejecutable y lectura del texto Rows. Estas clases estaban asignadas a Jostin; por acuerdo con él se desarrollaron en esta sesión para agilizar la integración, y se le informó de los cambios.
+6. **REPL conectado** (`frontend/Repl`, `Session`, `ReplStep`, `Statements`, `handlers/UseHandler`): ejecución real contra el engine, `;` como terminador, comando `.load`, `.use` contra el engine y núcleo funcional (`ReplStep.step`, sin entrada/salida). Se eliminó el fake de P1 (JsonFakeBroker, FakeQueryHandler, data/*.json).
+7. **Operaciones de escritura del engine** (`cyphail_engine.pl`: cy_create_node, cy_create_edge, cy_set_prop, cy_remove_prop, cy_delete, cy_detach_delete) y sus pruebas plunit. Esta parte pertenece al área de Angel; se integró en esta sesión y se le informará de los cambios.
+8. **Errores encontrados en pruebas de integración:** (a) una palabra clave dentro de un comentario se leía como token en el lexer (`CyphailLexers`, archivo de Jose); (b) OR devolvía filas repetidas (se corrigió con once/1 en el Codegen); (c) condición de carrera al conectar con el engine recién arrancado (reintentos en `MqiClient`); (d) el MQI aplana los errores que no vienen envueltos en error/2, por lo que los errores del engine se lanzan como error(cy_error(...), _).
+9. **Pruebas:** ayuda para escribir las pruebas JUnit de Codegen, Analyzer, broker, REPL y lexer, y las pruebas plunit del engine.
+10. **Documentación y demo:** README de P2 y el script `examples/demo_p2.cyphail`.
+11. **Revisión de código y apoyo en la integración** del trabajo de Jose, Jostin y Angel.
+
+### Jose David Chavarría Villalobos
+* **Modelo utilizado:** [COMPLETAR: herramienta de IA, o "no se usó IA"]
+* **Propósito:** [COMPLETAR]
+
+### Registro
+1. **Lexer:** nuevos tokens para P2.
+2. **Parser de relaciones:** patrones `(a)-[r:TIPO {p: v}]->(b)` con las tres direcciones.
+3. **CREATE sin MATCH** y pruebas (`ConditionParserTest`, `RelationshipParserTest`, `SpecStatementsParserTest`).
+4. [COMPLETAR: en qué puntos de lo anterior se usó IA y cómo]
+5. Nota: Luis corrigió en `CyphailLexers` un problema con palabras clave dentro de comentarios (ver Luis, punto 8a); Jose fue informado.
+
+### Jostin Jiménez Alfaro
+* **Modelo utilizado:** [COMPLETAR: herramienta de IA, o "no se usó IA"]
+* **Propósito:** [COMPLETAR]
+
+### Registro
+1. **Resultados del broker:** `PrologResult`, `PrologCompound` y `MqiResponseParser` (incluido el caso en que un goal que falla llega como el string "false") y sus pruebas.
+2. [COMPLETAR: en qué puntos se usó IA y cómo]
+3. Nota: las clases restantes del broker (MqiClient, EngineBroker, SwiplLocator, RowsTable) se desarrollaron junto con Luis (ver Luis, punto 5). Jostin conoce los cambios.
+
+### Angel Rojas Ruano
+* **Modelo utilizado:** [COMPLETAR: herramienta de IA, o "no se usó IA"]
+* **Propósito:** [COMPLETAR]
+
+### Registro
+1. **Engine Prolog (`cyphail_engine.pl`):** comparadores cy_eq, cy_neq, cy_gt, cy_lt, cy_gte, cy_lte; formato del texto Rows (cy_cell, cy_format_rows); ciclo de vida de la consulta (cy_create_query, cy_exec_query, cy_erase_query).
+2. **Pruebas plunit** del engine.
+3. [COMPLETAR: en qué puntos se usó IA y cómo]
+4. Nota: las operaciones de escritura del engine se integraron junto con Luis (ver Luis, punto 7); Angel fue informado de los cambios.

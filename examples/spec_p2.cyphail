@@ -1,3 +1,9 @@
+// Cyphail - Graph Query Engine Prototype
+// EIF400-II-2026 - Escuela de Informatica, UNA
+// Grupo: G05
+// Autores: Luis Felipe Jimenez Fernandez, Jose David Chavarria Villalobos,
+// Jostin Jimenez Alfaro, Angel Rojas Ruano
+
 // Ejemplos del SPEC del Sprint P2 (EIF400-II-2026, prof. C. Loria-Saenz).
 // Cada estatuto termina en ";". Es el corpus de aceptacion del parser, del codegen y de .load.
 

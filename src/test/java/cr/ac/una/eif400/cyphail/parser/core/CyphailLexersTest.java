@@ -50,6 +50,13 @@ public class CyphailLexersTest {
     }
 
     @Test
+    void aKeywordInsideACommentIsNotAToken() {
+        assertEquals("FAIL", lexed(CyphailLexers.Match(), "// aqui hay un MATCH\nCREATE (a)"));
+        assertEquals("FAIL", lexed(CyphailLexers.Create(), "/* un CREATE */ MATCH (a)"));
+        assertEquals("CREATE", lexed(CyphailLexers.Create(), "// el MATCH no cuenta\nCREATE (a)"));
+    }
+
+    @Test
     void eofAcceptsOnlyBlanksAndComments() {
         assertInstanceOf(Ok.class, CyphailLexers.Eof().parse(in("   // fin\n")));
         assertInstanceOf(Fail.class, CyphailLexers.Eof().parse(in("  RETURN x")));

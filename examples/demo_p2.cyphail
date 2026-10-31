@@ -1,0 +1,101 @@
+// Cyphail - Graph Query Engine Prototype
+// EIF400-II-2026 - Escuela de Informatica, UNA
+// Grupo: G05
+// Autores: Luis Felipe Jimenez Fernandez, Jose David Chavarria Villalobos,
+// Jostin Jimenez Alfaro, Angel Rojas Ruano
+
+// Cyphail - demo del Sprint P2 (EIF400-II-2026, grupo G05).
+// Se ejecuta con:   .load "examples/demo_p2.cyphail"
+// Crea sus propios datos y despues corre los estatutos del SPEC con resultados visibles.
+// Cada estatuto termina en ";". El script se puede cargar una sola vez por sesion del REPL
+// (el grafo vive en memoria mientras el REPL este abierto).
+
+// ---- 1. Datos de partida: CREATE sin MATCH, con etiquetas multiples y relaciones con propiedades ----
+CREATE (a:Autor {nombre: 'Bill Gates'});
+CREATE (b:Libro {titulo: 'Fake Windows Millenium'});
+
+CREATE (p:Product {code: "PROD-99", discount: 10});
+CREATE (q:Product {code: "PROD-01", discount: 5, precio: 5.5});
+
+CREATE (u:Student {id: "4-666-000"})-[r:attends]->(c:Course {nrc: "50691"});
+
+CREATE (x:Person:Female {name: 'Laura'})-[r:KNOWS {since: 1995}]->(y:Person:Male {name: 'Pedro'});
+CREATE (x:Person:Female {name: 'Sofia'})-[r:KNOWS {since: 2010}]->(y:Person:Male {name: 'Mario'});
+
+// ---- 2. II.4 del SPEC: CREATE ... RETURN con relacion y propiedades ----
+CREATE (a:Persona {nombre: 'Marta'})
+    -[r:TRABAJA_EN {rol: 'Dev'}]->(e:Empresa
+                                {nombre: 'UCR'})
+RETURN a, r, e;
+
+// Un nodo ya existente se reutiliza: Luis trabaja en la misma UCR (no se crea otra empresa).
+MATCH (e:Empresa {nombre: 'UCR'})
+CREATE (a:Persona {nombre: 'Luis'})-[r:TRABAJA_EN {rol: 'QA'}]->(e)
+RETURN a, r, e;
+
+// ---- 3. II.3 del SPEC: patrones de relaciones con varios caminos ----
+// Companeros de trabajo: las dos personas apuntan a la misma empresa.
+MATCH (p:Persona)-[:TRABAJA_EN]->(e:Empresa),
+      (c:Persona)-[:TRABAJA_EN]->(e)
+WHERE p.nombre <> c.nombre
+RETURN p.nombre, c.nombre, e.nombre;
+
+// ---- 4. II.4 del SPEC: crear una relacion entre nodos que ya existen ----
+MATCH (a:Autor {nombre: 'Bill Gates'}),
+      (b:Libro {titulo: 'Fake Windows Millenium'})
+CREATE (a)-[:ESCRIBIO]->(b);
+
+MATCH (a:Autor)-[:ESCRIBIO]->(b:Libro)
+RETURN a.nombre, b.titulo;
+
+// ---- 5. SET: asignar una propiedad nueva y volver a leerla ----
+MATCH (p:Product {code: "PROD-99"})
+SET p.precio = 19.99
+RETURN p;
+
+MATCH (p:Product)
+RETURN p.code, p.precio, p.discount;
+
+// ---- 6. REMOVE: quitar una propiedad ----
+MATCH (p:Product {code: "PROD-99"})
+REMOVE p.discount
+RETURN p.id;
+
+// PROD-99 ya no aparece: si una propiedad no existe, la fila se descarta.
+MATCH (p:Product)
+RETURN p.code, p.discount;
+
+// ---- 7. SET sobre una relacion ----
+MATCH
+(u:Student {id: "4-666-000"})
+-[r:attends]->
+(c:Course {nrc: "50691"})
+SET r.grade = 9.5
+RETURN u.id, r.grade;
+
+// ---- 8. DELETE de una relacion (solo las anteriores a 2000) ----
+MATCH (a:Person:Female)-[r:KNOWS]->(b:Person:Male)
+WHERE r.since < 2000
+DELETE r;
+
+MATCH (a:Person)-[r:KNOWS]->(b:Person)
+RETURN a.name, b.name, r.since;
+
+// ---- 9. DETACH DELETE: borra el nodo junto con sus relaciones ----
+MATCH (e:Empresa {nombre: 'UCR'})
+DETACH DELETE e;
+
+MATCH (p:Persona)
+RETURN p.nombre;
+
+// ---- 10. Grafo de ejemplo "amigos": AND / OR / NOT y relaciones en ambos sentidos ----
+// Amigos mutuos de la misma edad (ejemplo del transpilador del SPEC)
+MATCH (a) -[:amigo]-> (b),
+      (b) -[:amigo]-> (a)
+WHERE a.age > 18 AND a.age = b.age
+RETURN a.name, b.name;
+
+// Personas que no son hombres, o que son mayores de 40
+MATCH (p:Person)
+WHERE NOT p.gender = 'male' OR p.age > 40
+RETURN p.name, p.age, p.gender;
