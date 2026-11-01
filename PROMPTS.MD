@@ -122,9 +122,4 @@
 3. **Pruebas plunit** (commit 94b7a5d, `cyphail_engine_tests.pl`): me ayudó a redactar las pruebas de los comparadores, del formato de Rows y de las cuatro consultas esperadas de la tarjeta contra el grafo `amigos` (incluidos el caso de 0 filas y el borrado de la cláusula), más una prueba que comprueba que el engine solo imprime el puerto y la contraseña al arrancar con `mqi_start`.
 4. **Problemas encontrados al probar:** (a) la tarjeta sugiere arrancar el engine con el argumento `mqi`, pero no funcionó en el SWI-Prolog 9.0.4 donde se probó primero; la prueba usa `-g mqi_start -t halt -- --write_connection_values=true` y también pasó en la 10.0.2; (b) la ruta al engine dentro de la prueba dependía del directorio desde el que se corriera `swipl`, y me ayudó a cambiarla para resolverla respecto al archivo de pruebas.
 5. **Verificación:** corrí las pruebas con SWI-Prolog 10.0.2 (`swipl -g run_tests -t halt`, 25 de 25 aprobadas) antes de subir el último commit.
-6.**Nota:** las operaciones de escritura del engine (`cy_create_node`, `cy_create_edge`, `cy_set_prop`, `cy_remove_prop`, `cy_delete` y `cy_detach_delete`, commit f29cf21) no las escribí yo; las desarrolló Luis sobre este mismo archivo.
-### Registro
-1. **Engine Prolog (`cyphail_engine.pl`):** comparadores cy_eq, cy_neq, cy_gt, cy_lt, cy_gte, cy_lte; formato del texto Rows (cy_cell, cy_format_rows); ciclo de vida de la consulta (cy_create_query, cy_exec_query, cy_erase_query).
-2. **Pruebas plunit** del engine.
-3. [COMPLETAR: en qué puntos se usó IA y cómo]
-4. Nota: las operaciones de escritura del engine se integraron junto con Luis (ver Luis, punto 7); Angel fue informado de los cambios.
+6. **Nota:** las operaciones de escritura del engine (`cy_create_node`, `cy_create_edge`, `cy_set_prop`, `cy_remove_prop`, `cy_delete` y `cy_detach_delete`, commit f29cf21) no las escribí yo; las desarrolló Luis sobre este mismo archivo. (ver Luis, punto 7).
